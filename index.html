@@ -1,0 +1,735 @@
+<!doctype html>
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex"><style>html,body{margin:0}</style>
+<title>집 비교판</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: sticky 조건·필터 띠 → 비교 패널 → 한 줄에 한 집인 비교표(넓을 때) / 카드(좁을 때) */
+:root {
+  --bg: #f5f6f4;
+  --surface: #ffffff;
+  --ink: #1d2420;
+  --sub: #5b665f;
+  --line: #dde2de;
+  --accent: #2f6b55;
+  --accent-soft: #e3efe9;
+  --ok: #24764f;
+  --ok-soft: #e1f2e8;
+  --warn: #9a5b07;
+  --warn-soft: #fbefd9;
+  --no: #a23a2a;
+  --no-soft: #f8e4e0;
+  --unk: #565d66;
+  --unk-soft: #eceef0;
+  --star: #b7791f;
+  --shadow: 0 1px 2px rgba(20,30,25,.06), 0 4px 14px rgba(20,30,25,.05);
+  --f-body: "IBM Plex Sans KR", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+  --f-num: "IBM Plex Mono", ui-monospace, "Consolas", monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141816; --surface: #1c2220; --ink: #e7ece9; --sub: #a3aea8; --line: #2e3733;
+    --accent: #7cc4a6; --accent-soft: #1f3a30; --ok: #7fd1a3; --ok-soft: #1d3428; --warn: #e8b35c; --warn-soft: #3a2e17;
+    --no: #f08f7e; --no-soft: #3d221d; --unk: #9aa3ab; --unk-soft: #262c2a; --star: #e8b35c;
+    --shadow: 0 1px 2px rgba(0,0,0,.3); color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #141816; --surface: #1c2220; --ink: #e7ece9; --sub: #a3aea8; --line: #2e3733;
+  --accent: #7cc4a6; --accent-soft: #1f3a30; --ok: #7fd1a3; --ok-soft: #1d3428; --warn: #e8b35c; --warn-soft: #3a2e17;
+  --no: #f08f7e; --no-soft: #3d221d; --unk: #9aa3ab; --unk-soft: #262c2a; --star: #e8b35c;
+  --shadow: 0 1px 2px rgba(0,0,0,.3); color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font: 15px/1.5 var(--f-body); }
+.wrap { max-width: 1180px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 18px 48px; }
+h1 { font-size: 1.55rem; margin: 0; letter-spacing: -.01em; text-wrap: balance; }
+h2 { font-size: 1.05rem; margin: 0; }
+.num { font-family: var(--f-num); font-variant-numeric: tabular-nums; }
+.muted { color: var(--sub); }
+.small { font-size: .82rem; }
+button, select, input, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.head { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: flex-end; justify-content: space-between; margin-bottom: 12px; }
+.head p { margin: 4px 0 0; }
+.btn { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 7px 12px; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--surface); font-weight: 600; }
+.btn.ghost { background: transparent; }
+.btn.danger { color: var(--no); border-color: var(--no); background: transparent; }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+
+/* 조건 띠 (sticky) */
+.bar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); padding-block: 8px; border-bottom: 1px solid var(--line); margin-bottom: 14px; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.chip { background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 2px 10px; font-size: .82rem; white-space: nowrap; }
+.chip b { font-weight: 600; }
+.filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--surface); }
+.seg button { border: 0; background: transparent; padding: 5px 10px; font-size: .86rem; }
+.seg button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.filters select { border: 1px solid var(--line); border-radius: 8px; background: var(--surface); padding: 5px 8px; font-size: .86rem; }
+.grow { flex: 1 1 auto; }
+
+.note { border-radius: 8px; padding: 8px 12px; background: var(--unk-soft); color: var(--sub); font-size: .88rem; margin-bottom: 12px; }
+.note.warn { background: var(--warn-soft); color: var(--warn); }
+
+/* 비교 패널 */
+.compare { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); padding: 12px; margin-bottom: 16px; }
+.compare-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-top: 10px; }
+.cmp-col { border: 1px solid var(--line); border-radius: 10px; padding: 10px; min-width: 0; }
+.cmp-col h3 { margin: 0 0 6px; font-size: .98rem; }
+.cmp-row { display: flex; justify-content: space-between; gap: 8px; padding: 3px 0; border-top: 1px dashed var(--line); font-size: .88rem; }
+.cmp-row:first-of-type { border-top: 0; }
+.best { color: var(--ok); font-weight: 700; }
+.best::after { content: " ★"; color: var(--star); }
+
+/* 비교표 */
+.tablebox { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); }
+table { width: 100%; border-collapse: collapse; min-width: 980px; }
+th, td { padding: 8px 10px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; font-size: .9rem; }
+th { font-size: .78rem; color: var(--sub); font-weight: 600; letter-spacing: .02em; background: var(--surface); white-space: nowrap; }
+td.r, th.r { text-align: right; white-space: nowrap; }
+td.when { white-space: nowrap; }
+td.who { min-width: 210px; }
+td.flagcell { min-width: 170px; }
+tbody tr { cursor: pointer; animation: rise .32s cubic-bezier(.2,.8,.3,1.2) both; }
+tbody tr:hover { background: var(--accent-soft); }
+tbody tr.dead { opacity: .55; }
+@keyframes rise { from { transform: translateY(6px); opacity: .4; } to { transform: none; opacity: 1; } }
+.name { font-weight: 600; }
+.badge { display: inline-block; border-radius: 6px; padding: 1px 7px; font-size: .74rem; font-weight: 600; margin-right: 4px; white-space: nowrap; }
+.b-공고 { background: var(--accent-soft); color: var(--accent); }
+.b-매물 { background: var(--unk-soft); color: var(--sub); }
+.b-claude { background: var(--warn-soft); color: var(--warn); }
+.st { border-radius: 999px; padding: 1px 8px; font-size: .78rem; font-weight: 600; white-space: nowrap; }
+.st-후보 { background: var(--unk-soft); color: var(--sub); }
+.st-관심 { background: var(--accent-soft); color: var(--accent); }
+.st-신청함 { background: var(--ok-soft); color: var(--ok); }
+.st-탈락 { background: var(--no-soft); color: var(--no); }
+.flags { display: flex; flex-wrap: wrap; gap: 3px; }
+.f { border-radius: 5px; padding: 1px 6px; font-size: .74rem; white-space: nowrap; }
+.f.ok { background: var(--ok-soft); color: var(--ok); }
+.f.warn { background: var(--warn-soft); color: var(--warn); }
+.f.no { background: var(--no-soft); color: var(--no); }
+.f.unk { background: var(--unk-soft); color: var(--unk); }
+.star { color: var(--star); }
+.score { font-weight: 700; }
+input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
+
+/* 카드 (좁은 화면) */
+.cards { display: none; gap: 10px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px; box-shadow: var(--shadow); animation: rise .32s cubic-bezier(.2,.8,.3,1.2) both; min-width: 0; }
+.card .top { display: flex; gap: 8px; align-items: flex-start; justify-content: space-between; }
+.card dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; margin: 8px 0; font-size: .88rem; }
+.card dt { color: var(--sub); }
+.card dd { margin: 0; }
+.card .top label { white-space: nowrap; display: inline-flex; gap: 4px; align-items: center; }
+@media (max-width: 760px) {
+  .tablebox { display: none; }
+  .cards { display: grid; }
+  .bar { position: static; }
+}
+
+/* 상세·입력 패널 */
+.sheet { position: fixed; inset: 0; z-index: 20; display: flex; justify-content: flex-end; background: rgba(10,15,12,.38); }
+.sheet[hidden] { display: none !important; }
+.panel { width: min(560px, 100%); height: 100%; overflow-y: auto; background: var(--surface); padding: 16px max(16px, env(safe-area-inset-right, 0px)) 32px 16px; padding-top: max(16px, env(safe-area-inset-top, 0px)); box-shadow: -8px 0 30px rgba(0,0,0,.18); animation: slide .25s ease-out both; }
+@keyframes slide { from { transform: translateX(24px); opacity: .6; } to { transform: none; opacity: 1; } }
+.panel-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 10px; }
+.form { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; }
+.form .full { grid-column: 1 / -1; }
+.field { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.field label { font-size: .8rem; color: var(--sub); font-weight: 600; }
+.field input, .field select, .field textarea { border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; background: var(--bg); min-width: 0; width: 100%; }
+.field textarea { min-height: 80px; resize: vertical; }
+.hint { font-size: .78rem; color: var(--sub); }
+.drop { border: 1.5px dashed var(--line); border-radius: 10px; padding: 12px; text-align: center; color: var(--sub); font-size: .86rem; }
+.drop.on { border-color: var(--accent); background: var(--accent-soft); }
+.thumbs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.thumb { position: relative; width: 92px; height: 72px; border-radius: 8px; overflow: hidden; border: 1px solid var(--line); background: var(--unk-soft); }
+.thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.thumb .pdf { display: flex; align-items: center; justify-content: center; height: 100%; font-size: .8rem; color: var(--sub); }
+.thumb button { position: absolute; top: 2px; right: 2px; border: 0; border-radius: 6px; background: rgba(0,0,0,.6); color: #fff; font-size: .72rem; padding: 1px 5px; }
+.gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; margin: 10px 0; }
+.gallery a { display: block; border-radius: 8px; overflow: hidden; border: 1px solid var(--line); background: var(--unk-soft); aspect-ratio: 4 / 3; max-width: 100%; }
+.gallery img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.kv { display: grid; grid-template-columns: 110px 1fr; gap: 4px 10px; font-size: .9rem; margin: 10px 0; }
+.kv div:nth-child(odd) { color: var(--sub); }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.confirm { background: var(--no-soft); color: var(--no); border-radius: 8px; padding: 8px 10px; margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.empty { text-align: center; padding: 36px 16px; color: var(--sub); }
+.toast { position: fixed; left: 50%; bottom: max(18px, env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 8px 14px; border-radius: 8px; font-size: .88rem; z-index: 30; }
+.memo-cell { max-width: 220px; color: var(--sub); font-size: .82rem; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+@media (max-width: 520px) { .form { grid-template-columns: 1fr; } .kv { grid-template-columns: 92px 1fr; } }
+</style>
+
+<div class="wrap">
+  <header class="head">
+    <div>
+      <h1>집 비교판</h1>
+      <p class="muted small">2인 · 전용 10평 이상 · 방 2개 이상 · 전세 만기 <span class="num">2027-02-21</span> · 공고와 매물을 한 표에서 비교</p>
+    </div>
+    <div class="chips">
+      <button class="btn" id="btnCond" type="button">조건 고치기</button>
+      <button class="btn primary" id="btnAdd" type="button">+ 매물 올리기</button>
+    </div>
+  </header>
+
+  <div class="bar">
+    <div class="chips" id="condChips"></div>
+    <div class="filters">
+      <div class="seg" role="group" aria-label="상태">
+        <button type="button" data-status="live" aria-pressed="true">살아 있는 후보</button>
+        <button type="button" data-status="all" aria-pressed="false">전체</button>
+        <button type="button" data-status="탈락" aria-pressed="false">탈락</button>
+      </div>
+      <div class="seg" role="group" aria-label="종류">
+        <button type="button" data-kind="all" aria-pressed="true">전부</button>
+        <button type="button" data-kind="공고" aria-pressed="false">공고</button>
+        <button type="button" data-kind="매물" aria-pressed="false">매물</button>
+      </div>
+      <label class="small muted" for="sortSel">정렬</label>
+      <select id="sortSel">
+        <option value="score">조건 맞는 순</option>
+        <option value="monthly">월 부담 적은 순</option>
+        <option value="area">넓은 순</option>
+        <option value="deposit">보증금 적은 순</option>
+        <option value="deadline">마감 빠른 순</option>
+        <option value="new">최근 올린 순</option>
+      </select>
+      <span class="grow"></span>
+      <span class="small muted" id="countLbl"></span>
+    </div>
+  </div>
+
+  <div class="note" id="statusNote">비교판을 불러오는 중이에요.</div>
+
+  <section class="compare" id="compareBox" hidden>
+    <div class="chips" style="justify-content:space-between">
+      <h2>골라서 나란히 보기 <span class="muted small" id="cmpCount"></span></h2>
+      <button class="btn ghost" id="btnClearCmp" type="button">선택 지우기</button>
+    </div>
+    <div class="compare-grid" id="compareGrid"></div>
+  </section>
+
+  <div class="tablebox">
+    <table>
+      <thead>
+        <tr>
+          <th title="나란히 보기">비교</th>
+          <th>집</th>
+          <th class="r">전용</th>
+          <th class="r">방</th>
+          <th class="r">보증금</th>
+          <th class="r">월세+관리비</th>
+          <th class="r" title="월세 + 관리비 + 주차비 + 대출 이자">월 부담</th>
+          <th>주차</th>
+          <th>입주 · 마감</th>
+          <th>조건</th>
+          <th>상태</th>
+          <th>메모</th>
+        </tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+  <div class="cards" id="cards"></div>
+  <div class="empty" id="emptyBox" hidden>
+    <p><b>아직 비교할 집이 없어요.</b></p>
+    <p class="small">«+ 매물 올리기»로 직접 찾은 집을 넣거나, 월·목 아침 정기 검색이 찾은 공고·매물이 여기에 쌓여요.</p>
+  </div>
+  <p class="small muted" style="margin-top:12px">월 부담 = 월세 + 관리비 + 주차비 + (보증금 − 자기 돈) × 대출 금리 ÷ 12. 대출 금리와 자기 돈은 «조건 고치기»에서 바꿔요. 금액 단위는 만 원.</p>
+</div>
+
+<!-- 상세 -->
+<div class="sheet" id="detailSheet" hidden>
+  <div class="panel" role="dialog" aria-modal="true" aria-labelledby="dTitle">
+    <div class="panel-head">
+      <h2 id="dTitle"></h2>
+      <button class="btn ghost" type="button" data-close>닫기</button>
+    </div>
+    <div id="dBody"></div>
+  </div>
+</div>
+
+<!-- 입력 -->
+<div class="sheet" id="formSheet" hidden>
+  <div class="panel" role="dialog" aria-modal="true" aria-labelledby="fTitle">
+    <div class="panel-head">
+      <h2 id="fTitle">매물 올리기</h2>
+      <button class="btn ghost" type="button" data-close>닫기</button>
+    </div>
+    <form id="itemForm" class="form" novalidate>
+      <div class="field full"><label for="f_name">이름 (단지·건물명이나 알아볼 말)</label><input id="f_name" required placeholder="예: 신대방역 ○○빌라 3층"></div>
+      <div class="field"><label for="f_kind">종류</label><select id="f_kind"><option>매물</option><option>공고</option></select></div>
+      <div class="field"><label for="f_deal">거래</label><select id="f_deal"><option>전세</option><option>반전세</option><option>월세</option><option>공공임대</option><option>분양</option></select></div>
+      <div class="field"><label for="f_station">가까운 역·동네</label><input id="f_station" placeholder="예: 신대방역, 관악구 신사동"></div>
+      <div class="field"><label for="f_walk">역까지 걸어서 (분)</label><input id="f_walk" inputmode="numeric" placeholder="예: 7"></div>
+      <div class="field"><label for="f_area">전용면적 (㎡)</label><input id="f_area" inputmode="decimal" placeholder="예: 39.6"><span class="hint" id="f_area_hint">평으로 쓰면 ㎡로 바꿔서 넣어 주세요 (1평 = 3.3058㎡)</span></div>
+      <div class="field"><label for="f_rooms">방 개수</label><input id="f_rooms" inputmode="numeric" placeholder="예: 2"></div>
+      <div class="field"><label for="f_deposit">보증금 (만 원)</label><input id="f_deposit" inputmode="numeric" placeholder="예: 25000"></div>
+      <div class="field"><label for="f_rent">월세 (만 원)</label><input id="f_rent" inputmode="decimal" placeholder="전세면 0"></div>
+      <div class="field"><label for="f_mgmt">관리비 (만 원/월)</label><input id="f_mgmt" inputmode="decimal" placeholder="예: 12"></div>
+      <div class="field"><label for="f_parking">주차</label><select id="f_parking"><option>미확인</option><option>가능</option><option>불가</option></select></div>
+      <div class="field"><label for="f_pfee">주차비 (만 원/월)</label><input id="f_pfee" inputmode="decimal" placeholder="없으면 비워 두기"></div>
+      <div class="field"><label for="f_movein">입주 가능일</label><input id="f_movein" type="date"></div>
+      <div class="field"><label for="f_deadline">신청 마감 (공고)</label><input id="f_deadline" type="date"></div>
+      <div class="field"><label for="f_status">상태</label><select id="f_status"><option>후보</option><option>관심</option><option>신청함</option><option>탈락</option></select></div>
+      <div class="field full"><label for="f_link">링크</label><input id="f_link" inputmode="url" placeholder="https://"></div>
+      <div class="field full"><label for="f_memo">메모 (좋은 점·걸리는 점)</label><textarea id="f_memo"></textarea></div>
+      <div class="field full" id="photoField">
+        <label for="f_files">사진·평면도·캡처 (여러 장 가능)</label>
+        <div class="drop" id="dropZone">여기에 끌어다 놓거나, 캡처한 그림을 붙여넣기(Ctrl+V)하거나, <button class="btn" type="button" id="btnPick">파일 고르기</button></div>
+        <input id="f_files" type="file" accept="image/*,application/pdf" multiple hidden>
+        <div class="thumbs" id="thumbs"></div>
+      </div>
+      <p class="hint full" id="noUploadHint" hidden>사진은 아직 올릴 수 없어요. 링크와 메모로 남겨 주세요.</p>
+      <div class="actions full">
+        <button class="btn primary" type="submit" id="btnSave">저장</button>
+        <button class="btn ghost" type="button" data-close>취소</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- 조건 -->
+<div class="sheet" id="condSheet" hidden>
+  <div class="panel" role="dialog" aria-modal="true" aria-labelledby="cTitle">
+    <div class="panel-head">
+      <h2 id="cTitle">조건 고치기</h2>
+      <button class="btn ghost" type="button" data-close>닫기</button>
+    </div>
+    <form id="condForm" class="form" novalidate>
+      <div class="field"><label for="c_minArea">최소 전용면적 (㎡)</label><input id="c_minArea" inputmode="decimal"></div>
+      <div class="field"><label for="c_minRooms">최소 방 개수</label><input id="c_minRooms" inputmode="numeric"></div>
+      <div class="field"><label for="c_self">자기 돈 (만 원)</label><input id="c_self" inputmode="numeric"></div>
+      <div class="field"><label for="c_maxDep">보증금 최대 (만 원)</label><input id="c_maxDep" inputmode="numeric"></div>
+      <div class="field"><label for="c_monthly">월세+관리비 목표 (만 원)</label><input id="c_monthly" inputmode="numeric"></div>
+      <div class="field"><label for="c_rate">대출 금리 (연 %)</label><input id="c_rate" inputmode="decimal"></div>
+      <div class="field"><label for="c_moveBy">지금 집 만기</label><input id="c_moveBy" type="date"></div>
+      <div class="field"><label for="c_near">먼저 볼 동네 (쉼표로)</label><input id="c_near"></div>
+      <p class="hint full">보증금 최대는 «버팀목 신혼 수도권 한도 2.5억, 보증금의 80%» 가정으로 잡은 값이에요. 은행 답을 들으면 고쳐 주세요.</p>
+      <div class="actions full">
+        <button class="btn primary" type="submit">조건 저장</button>
+        <button class="btn ghost" type="button" data-close>취소</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="sheet" id="gateSheet" hidden>
+  <div class="panel" role="dialog" aria-modal="true" aria-labelledby="gTitle" style="align-self:flex-start;height:auto;max-width:420px;margin:auto">
+    <h2 id="gTitle">비밀번호를 넣어 주세요</h2>
+    <form id="gateForm" class="form" novalidate>
+      <div class="field full"><label for="gatePw">비밀번호</label><input id="gatePw" type="password" autocomplete="current-password"></div>
+      <p class="hint full" id="gateMsg">처음 한 번만 넣으면 이 기기에 기억해요.</p>
+      <div class="actions full"><button class="btn primary" type="submit">들어가기</button></div>
+    </form>
+  </div>
+</div>
+
+<div class="toast" id="toast" hidden></div>
+
+<script>
+(function () {
+  "use strict";
+  const DEFAULT_COND = { minArea: 33, minRooms: 2, selfFunds: 8000, maxDeposit: 33000, monthlyTarget: 100, rate: 2.5, moveBy: "2027-02-21", near: "신대방, 신사동, 보라매, 신림, 대방" };
+  const S = { items: [], cond: Object.assign({}, DEFAULT_COND), status: "live", kind: "all", sort: "score", sel: new Set(), db: null, assets: null, canWrite: true, editing: null, pending: [], keepPhotos: [], loaded: false };
+  const imgSrc = (p) => /^(https?:|plans\/)/.test(p) ? p : "/_blob/" + p;
+  const $ = (id) => document.getElementById(id);
+  const el = (tag, attrs, ...kids) => { const e = document.createElement(tag); if (attrs) for (const k in attrs) { if (k === "class") e.className = attrs[k]; else if (k === "text") e.textContent = attrs[k]; else if (k.startsWith("on")) e.addEventListener(k.slice(2), attrs[k]); else if (attrs[k] !== undefined && attrs[k] !== null) e.setAttribute(k, attrs[k]); } for (const c of kids) if (c != null) e.append(c); return e; };
+  const n = (v) => { if (v === "" || v == null) return null; const x = Number(String(v).replace(/[, ]/g, "")); return Number.isFinite(x) ? x : null; };
+  const fmt = (v, d) => v == null ? "–" : Number(v).toLocaleString("ko-KR", { maximumFractionDigits: d == null ? 0 : d });
+  const py = (m2) => m2 == null ? null : m2 / 3.3058;
+  const safeUrl = (u) => { try { const x = new URL(u); return (x.protocol === "https:" || x.protocol === "http:") ? x.href : null; } catch (e) { return null; } };
+  function toast(msg) { const t = $("toast"); t.textContent = msg; t.hidden = false; clearTimeout(toast._t); toast._t = setTimeout(() => { t.hidden = true; }, 2600); }
+
+  /* ---------- 계산 ---------- */
+  function derive(it) {
+    const c = S.cond;
+    const dep = n(it.deposit), rent = n(it.rent) || 0, mgmt = n(it.mgmt) || 0, pfee = n(it.parkingFee) || 0;
+    const loan = dep == null ? null : Math.max(0, dep - (n(c.selfFunds) || 0));
+    const interest = loan == null ? null : loan * (n(c.rate) || 0) / 100 / 12;
+    const monthly = dep == null ? null : rent + mgmt + pfee + interest;
+    const flags = [];
+    const area = n(it.area), rooms = n(it.rooms);
+    flags.push(area == null ? ["unk", "면적?"] : area >= c.minArea ? ["ok", "면적"] : ["no", "좁음"]);
+    flags.push(rooms == null ? ["unk", "방?"] : rooms >= c.minRooms ? ["ok", "방 " + rooms] : ["no", "방 " + rooms]);
+    if (dep == null) flags.push(["unk", "돈?"]);
+    else if (dep > c.maxDeposit) flags.push(["no", "보증금 초과"]);
+    else if (rent + mgmt <= c.monthlyTarget) flags.push(["ok", "예산"]);
+    else if (rent + mgmt <= c.monthlyTarget * 1.15 + 1e-6) flags.push(["warn", "월세 조금 넘음"]);
+    else flags.push(["no", "월세 초과"]);
+    flags.push(it.parking === "가능" ? ["ok", "주차"] : it.parking === "불가" ? ["warn", "주차 없음"] : ["unk", "주차?"]);
+    const mi = it.moveIn ? Date.parse(it.moveIn) : NaN, by = Date.parse(c.moveBy);
+    if (isNaN(mi) || isNaN(by)) flags.push(["unk", "입주?"]);
+    else { const days = (mi - by) / 86400000; flags.push(days < -21 ? ["warn", "만기 전 입주"] : days > 35 ? ["no", "입주 늦음"] : ["ok", "입주 시기"]); }
+    const near = String(c.near || "").split(/[,，]/).map((s) => s.trim()).filter(Boolean);
+    const hay = (it.station || "") + " " + (it.name || "") + " " + (it.address || "");
+    const isNear = near.some((k) => hay.includes(k));
+    const score = flags.filter((f) => f[0] === "ok").length + (isNear ? 0.5 : 0);
+    const hardFail = flags.some((f) => f[0] === "no");
+    return { dep, rent, mgmt, pfee, loan, interest, monthly, area, rooms, flags, isNear, score, hardFail };
+  }
+
+  function visibleItems() {
+    let list = S.items.map((it) => ({ it, d: derive(it) }));
+    if (S.status === "live") list = list.filter((x) => x.it.status !== "탈락");
+    else if (S.status === "탈락") list = list.filter((x) => x.it.status === "탈락");
+    if (S.kind !== "all") list = list.filter((x) => (x.it.kind || "매물") === S.kind);
+    const big = 1e12;
+    const key = {
+      score: (x) => -(x.d.score - (x.d.hardFail ? 10 : 0)),
+      monthly: (x) => x.d.monthly == null ? big : x.d.monthly,
+      area: (x) => x.d.area == null ? big : -x.d.area,
+      deposit: (x) => x.d.dep == null ? big : x.d.dep,
+      deadline: (x) => x.it.deadline ? Date.parse(x.it.deadline) || big : big,
+      new: (x) => -(Date.parse(x.it.createdAt || 0) || 0),
+    }[S.sort];
+    list.sort((a, b) => key(a) - key(b) || String(a.it.name).localeCompare(String(b.it.name), "ko"));
+    return list;
+  }
+
+  /* ---------- 그리기 ---------- */
+  function flagEls(d) { return el("div", { class: "flags" }, ...d.flags.map((f) => el("span", { class: "f " + f[0], text: f[1] })), d.isNear ? el("span", { class: "f ok", text: "★ 가까운 동네" }) : null); }
+  function nameEls(it, d) {
+    return el("div", null,
+      el("div", { class: "name" }, d.isNear ? el("span", { class: "star", text: "★ " }) : null, it.name || "(이름 없음)"),
+      el("div", { class: "small muted" },
+        el("span", { class: "badge b-" + (it.kind || "매물"), text: (it.kind || "매물") + " · " + (it.deal || "–") }),
+        it.source === "클로드" ? el("span", { class: "badge b-claude", text: "클로드 검색" }) : null,
+        (it.station || "") + (n(it.walkMin) != null ? " 도보 " + n(it.walkMin) + "분" : "")));
+  }
+  function moneyMonthly(d) { return d.rent || d.mgmt ? fmt(d.rent, 1) + " + " + fmt(d.mgmt, 1) : (d.dep == null ? "–" : "0"); }
+  function dateLine(it) {
+    const parts = [];
+    if (it.moveIn) parts.push("입주 " + it.moveIn.slice(2));
+    if (it.deadline) { const left = Math.ceil((Date.parse(it.deadline) - Date.now()) / 86400000); parts.push("마감 " + it.deadline.slice(5) + (left >= 0 && left <= 3 ? " (D-" + left + ")" : left < 0 ? " (지남)" : "")); }
+    return parts.join(" · ") || "–";
+  }
+
+  function render() {
+    const c = S.cond;
+    const chips = $("condChips"); chips.replaceChildren(
+      el("span", { class: "chip" }, "전용 ", el("b", { class: "num", text: fmt(c.minArea) + "㎡" }), "↑"),
+      el("span", { class: "chip" }, "방 ", el("b", { class: "num", text: fmt(c.minRooms) }), "개↑"),
+      el("span", { class: "chip" }, "보증금 ", el("b", { class: "num", text: fmt(c.maxDeposit) }), " 이하"),
+      el("span", { class: "chip" }, "월세+관리비 ", el("b", { class: "num", text: fmt(c.monthlyTarget) }), " 내외"),
+      el("span", { class: "chip" }, "자기 돈 ", el("b", { class: "num", text: fmt(c.selfFunds) })),
+      el("span", { class: "chip" }, "금리 ", el("b", { class: "num", text: fmt(c.rate, 2) + "%" })),
+      el("span", { class: "chip" }, "만기 ", el("b", { class: "num", text: c.moveBy })),
+      el("span", { class: "chip" }, "★ ", c.near));
+    const list = visibleItems();
+    $("countLbl").textContent = list.length + "곳 표시 · 전체 " + S.items.length + "곳";
+    const rows = $("rows"), cards = $("cards");
+    rows.replaceChildren(); cards.replaceChildren();
+    list.forEach((x, i) => {
+      const { it, d } = x;
+      const cb = el("input", { type: "checkbox", "aria-label": (it.name || "") + " 나란히 보기에 넣기" });
+      cb.checked = S.sel.has(it.id);
+      cb.addEventListener("click", (e) => e.stopPropagation());
+      cb.addEventListener("change", () => { if (cb.checked) S.sel.add(it.id); else S.sel.delete(it.id); renderCompare(); });
+      const tr = el("tr", { class: it.status === "탈락" ? "dead" : "", style: "animation-delay:" + Math.min(i, 12) * 0.04 + "s" },
+        el("td", null, cb),
+        el("td", { class: "who" }, nameEls(it, d)),
+        el("td", { class: "r num" }, d.area == null ? "–" : fmt(d.area, 1) + "㎡", el("div", { class: "small muted", text: d.area == null ? "" : fmt(py(d.area), 1) + "평" })),
+        el("td", { class: "r num", text: d.rooms == null ? "–" : fmt(d.rooms) }),
+        el("td", { class: "r num", text: fmt(d.dep) }),
+        el("td", { class: "r num", text: moneyMonthly(d) }),
+        el("td", { class: "r num", title: d.monthly == null ? "" : "이자 " + fmt(d.interest, 1) + " (대출 " + fmt(d.loan) + ")" }, el("b", { text: d.monthly == null ? "–" : fmt(d.monthly, 0) })),
+        el("td", { class: "when" }, it.parking || "미확인", n(it.parkingFee) ? el("div", { class: "small muted", text: "월 " + fmt(n(it.parkingFee), 1) }) : null),
+        el("td", { class: "small when" }, ...dateLine(it).split(" · ").flatMap((s, k) => k ? [el("br"), s] : [s])),
+        el("td", { class: "flagcell" }, flagEls(d)),
+        el("td", null, el("span", { class: "st st-" + (it.status || "후보"), text: it.status || "후보" })),
+        el("td", null, el("div", { class: "memo-cell", text: it.memo || "" })));
+      tr.addEventListener("click", () => openDetail(it.id));
+      rows.append(tr);
+      const cb2 = cb.cloneNode(); cb2.checked = cb.checked;
+      cb2.addEventListener("click", (e) => e.stopPropagation());
+      cb2.addEventListener("change", () => { if (cb2.checked) S.sel.add(it.id); else S.sel.delete(it.id); render(); });
+      const card = el("article", { class: "card", style: "animation-delay:" + Math.min(i, 12) * 0.04 + "s" },
+        el("div", { class: "top" }, nameEls(it, d), el("label", { class: "small muted" }, cb2, " 비교")),
+        el("dl", null,
+          el("dt", { text: "전용·방" }), el("dd", { class: "num", text: (d.area == null ? "–" : fmt(d.area, 1) + "㎡ (" + fmt(py(d.area), 1) + "평)") + " · 방 " + (d.rooms == null ? "–" : d.rooms) }),
+          el("dt", { text: "보증금" }), el("dd", { class: "num", text: fmt(d.dep) }),
+          el("dt", { text: "월세+관리비" }), el("dd", { class: "num", text: moneyMonthly(d) }),
+          el("dt", { text: "월 부담" }), el("dd", { class: "num" }, el("b", { text: d.monthly == null ? "–" : fmt(d.monthly, 0) })),
+          el("dt", { text: "날짜" }), el("dd", { text: dateLine(it) })),
+        flagEls(d),
+        el("div", { class: "small", style: "margin-top:6px" }, el("span", { class: "st st-" + (it.status || "후보"), text: it.status || "후보" })));
+      card.addEventListener("click", () => openDetail(it.id));
+      cards.append(card);
+    });
+    $("emptyBox").hidden = !(S.loaded && list.length === 0);
+    renderCompare();
+  }
+
+  function renderCompare() {
+    const picked = S.items.filter((it) => S.sel.has(it.id));
+    const box = $("compareBox");
+    if (picked.length < 2) { box.hidden = true; $("cmpCount").textContent = ""; if (picked.length === 1) toastOnce(); return; }
+    box.hidden = false;
+    $("cmpCount").textContent = picked.length + "곳";
+    const ds = picked.map((it) => ({ it, d: derive(it) }));
+    const metrics = [
+      ["전용면적", (x) => x.d.area, "max", (v) => fmt(v, 1) + "㎡ (" + fmt(py(v), 1) + "평)"],
+      ["방", (x) => x.d.rooms, "max", (v) => fmt(v)],
+      ["보증금", (x) => x.d.dep, "min", (v) => fmt(v)],
+      ["필요한 대출", (x) => x.d.loan, "min", (v) => fmt(v)],
+      ["월세+관리비", (x) => x.d.dep == null ? null : x.d.rent + x.d.mgmt, "min", (v) => fmt(v, 1)],
+      ["월 부담(이자 포함)", (x) => x.d.monthly, "min", (v) => fmt(v, 0)],
+      ["역까지", (x) => n(x.it.walkMin), "min", (v) => fmt(v) + "분"],
+    ];
+    const grid = $("compareGrid"); grid.replaceChildren();
+    ds.forEach((x) => {
+      const col = el("div", { class: "cmp-col" }, el("h3", { text: x.it.name || "" }), el("div", { class: "small muted", style: "margin-bottom:6px", text: (x.it.kind || "매물") + " · " + (x.it.deal || "") + " · " + (x.it.station || "") }));
+      metrics.forEach(([label, get, dir, show]) => {
+        const v = get(x); const vals = ds.map(get).filter((t) => t != null);
+        const allSame = vals.every((t) => t === vals[0]);
+        const best = v != null && vals.length > 1 && !allSame && v === (dir === "max" ? Math.max(...vals) : Math.min(...vals));
+        col.append(el("div", { class: "cmp-row" }, el("span", { class: "muted", text: label }), el("span", { class: "num" + (best ? " best" : ""), text: v == null ? "–" : show(v) })));
+      });
+      col.append(el("div", { class: "cmp-row" }, el("span", { class: "muted", text: "주차" }), el("span", { text: x.it.parking || "미확인" })));
+      col.append(el("div", { class: "cmp-row" }, el("span", { class: "muted", text: "입주·마감" }), el("span", { class: "small", text: dateLine(x.it) })));
+      col.append(el("div", { style: "margin-top:6px" }, flagEls(x.d)));
+      grid.append(col);
+    });
+  }
+  let toasted = false; function toastOnce() { if (!toasted) { toasted = true; toast("한 곳 더 고르면 나란히 비교해요"); } }
+
+  /* ---------- 상세 ---------- */
+  function openSheet(id) { const s = $(id); s.hidden = false; const f = s.querySelector("input,select,textarea,button"); if (f) setTimeout(() => f.focus(), 30); }
+  function closeSheets() { for (const id of ["detailSheet", "formSheet", "condSheet"]) $(id).hidden = true; }
+  document.querySelectorAll("[data-close]").forEach((b) => b.addEventListener("click", closeSheets));
+  document.querySelectorAll(".sheet").forEach((s) => s.addEventListener("click", (e) => { if (e.target === s) closeSheets(); }));
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeSheets(); });
+
+  function openDetail(id) {
+    const it = S.items.find((x) => x.id === id); if (!it) return;
+    const d = derive(it);
+    $("dTitle").textContent = it.name || "";
+    const body = $("dBody"); body.replaceChildren();
+    const photos = Array.isArray(it.photos) ? it.photos : [];
+    if (photos.length) {
+      const g = el("div", { class: "gallery" });
+      photos.forEach((p) => { const pid = typeof p === "string" ? p : p.id; const isPdf = typeof p === "object" && /pdf/.test(p.type || ""); const a = el("a", { href: imgSrc(pid), target: "_blank", rel: "noopener" }, isPdf ? el("div", { class: "thumb" }, el("div", { class: "pdf", text: "PDF 열기" })) : el("img", { src: imgSrc(pid), alt: (it.name || "") + " 사진", loading: "lazy" })); g.append(a); });
+      body.append(g);
+    }
+    const link = safeUrl(it.link || "");
+    const kv = el("div", { class: "kv" },
+      el("div", { text: "종류" }), el("div", { text: (it.kind || "매물") + " · " + (it.deal || "–") + (it.source === "클로드" ? " · 클로드 검색" : "") }),
+      el("div", { text: "위치" }), el("div", { text: (it.station || "–") + (n(it.walkMin) != null ? " · 도보 " + n(it.walkMin) + "분" : "") + (it.address ? " · " + it.address : "") }),
+      el("div", { text: "전용·방" }), el("div", { class: "num", text: (d.area == null ? "–" : fmt(d.area, 2) + "㎡ (" + fmt(py(d.area), 1) + "평)") + " · 방 " + (d.rooms ?? "–") + (it.baths ? " · 욕실 " + it.baths : "") }),
+      el("div", { text: "보증금" }), el("div", { class: "num", text: fmt(d.dep) + " (대출 필요 " + fmt(d.loan) + ")" }),
+      el("div", { text: "월세·관리비" }), el("div", { class: "num", text: fmt(d.rent, 1) + " · " + fmt(d.mgmt, 1) + (d.pfee ? " · 주차 " + fmt(d.pfee, 1) : "") }),
+      el("div", { text: "월 부담" }), el("div", { class: "num" }, el("b", { text: d.monthly == null ? "–" : fmt(d.monthly, 0) }), d.interest == null ? "" : " (이자 " + fmt(d.interest, 1) + ")"),
+      el("div", { text: "주차" }), el("div", { text: it.parking || "미확인" }),
+      el("div", { text: "입주·마감" }), el("div", { text: dateLine(it) }),
+      el("div", { text: "상태" }), el("div", null, el("span", { class: "st st-" + (it.status || "후보"), text: it.status || "후보" })),
+      el("div", { text: "링크" }), el("div", null, link ? el("a", { href: link, target: "_blank", rel: "noopener", text: "열기 ↗" }) : el("span", { class: "muted", text: "없음" })));
+    body.append(kv, flagEls(d));
+    if (it.memo) body.append(el("p", { style: "white-space:pre-wrap", text: it.memo }));
+    if (it.createdAt) body.append(el("p", { class: "small muted", text: "올린 날 " + String(it.createdAt).slice(0, 10) + (it.updatedAt ? " · 고친 날 " + String(it.updatedAt).slice(0, 10) : "") }));
+    if (S.canWrite && S.db) {
+      const statusSel = el("select", { "aria-label": "상태 바꾸기", class: "btn" }, ...["후보", "관심", "신청함", "탈락"].map((s) => { const o = el("option", { text: s }); if ((it.status || "후보") === s) o.selected = true; return o; }));
+      statusSel.addEventListener("change", async () => { try { await S.db.doc("listings/" + it.id).update({ status: statusSel.value, updatedAt: new Date().toISOString() }); toast("상태를 «" + statusSel.value + "»로 바꿨어요"); } catch (e) { toast("저장하지 못했어요: " + (e && e.code || "오류")); } });
+      const edit = el("button", { class: "btn", type: "button", text: "고치기", onclick: () => openForm(it.id) });
+      const del = el("button", { class: "btn danger", type: "button", text: "지우기" });
+      const actions = el("div", { class: "actions" }, statusSel, edit, del);
+      del.addEventListener("click", () => {
+        if (actions.querySelector(".confirm")) return;
+        const yes = el("button", { class: "btn danger", type: "button", text: "네, 지울게요" });
+        const no = el("button", { class: "btn ghost", type: "button", text: "그대로 두기" });
+        const box = el("div", { class: "confirm" }, "«" + (it.name || "") + "»과 올린 사진을 지울까요? 되돌릴 수 없어요. 지운 집은 정기 검색이 다시 올리지 않아요. 나중에 다시 볼 수도 있으면 «탈락»으로 바꾸세요.", yes, no);
+        no.addEventListener("click", () => box.remove());
+        yes.addEventListener("click", async () => {
+          yes.disabled = true;
+          try {
+            /* 지운 집을 기록해 두면 정기 검색이 같은 집을 다시 넣지 않는다 */
+            await S.db.doc("dismissed/" + it.id).set({ name: it.name || "", link: it.link || "", station: it.station || "", address: it.address || "", dismissedAt: new Date().toISOString() });
+            await S.db.doc("listings/" + it.id).delete();
+            if (S.assets) for (const p of photos) { try { await S.assets.delete(typeof p === "string" ? p : p.id); } catch (e) { /* 사진이 이미 없으면 넘어감 */ } }
+            S.sel.delete(it.id); closeSheets(); toast("지웠어요");
+          } catch (e) { yes.disabled = false; toast("지우지 못했어요: " + (e && e.code || "오류")); }
+        });
+        actions.append(box);
+      });
+      body.append(actions);
+    }
+    openSheet("detailSheet");
+  }
+
+  /* ---------- 입력 ---------- */
+  const F = ["name", "kind", "deal", "station", "walk", "area", "rooms", "deposit", "rent", "mgmt", "parking", "pfee", "movein", "deadline", "status", "link", "memo"];
+  const MAP = { walk: "walkMin", pfee: "parkingFee", movein: "moveIn" };
+  function openForm(id) {
+    closeSheets();
+    S.editing = id || null; S.pending = []; S.removed = [];
+    const it = id ? S.items.find((x) => x.id === id) : null;
+    $("fTitle").textContent = it ? "고치기: " + (it.name || "") : "매물 올리기";
+    for (const k of F) { const f = $("f_" + k); const key = MAP[k] || k; const v = it ? it[key] : null; if (f.tagName === "SELECT") f.value = v || f.options[0].value; else f.value = v == null ? "" : v; }
+    S.keepPhotos = it && Array.isArray(it.photos) ? it.photos.slice() : [];
+    $("photoField").hidden = !S.assets; $("noUploadHint").hidden = !!S.assets;
+    drawThumbs();
+    openSheet("formSheet");
+  }
+  function drawThumbs() {
+    const t = $("thumbs"); t.replaceChildren();
+    S.keepPhotos.forEach((p, i) => { const pid = typeof p === "string" ? p : p.id; const isPdf = typeof p === "object" && /pdf/.test(p.type || ""); t.append(el("div", { class: "thumb" }, isPdf ? el("div", { class: "pdf", text: "PDF" }) : el("img", { src: imgSrc(pid), alt: "올린 사진" }), el("button", { type: "button", text: "빼기", onclick: () => { S.keepPhotos.splice(i, 1); S.removed = (S.removed || []).concat([pid]); drawThumbs(); } }))); });
+    S.pending.forEach((f, i) => { const isPdf = f.type === "application/pdf"; const url = isPdf ? null : URL.createObjectURL(f); t.append(el("div", { class: "thumb" }, isPdf ? el("div", { class: "pdf", text: "PDF" }) : el("img", { src: url, alt: "새 사진" }), el("button", { type: "button", text: "빼기", onclick: () => { S.pending.splice(i, 1); drawThumbs(); } }))); });
+  }
+  function addFiles(list) {
+    for (const f of list) {
+      if (!/^image\/(png|jpeg|gif|webp)$/.test(f.type) && f.type !== "application/pdf") { toast("사진(png·jpg·gif·webp)이나 PDF만 올릴 수 있어요"); continue; }
+      if (f.size > 20 * 1024 * 1024) { toast("20MB보다 큰 파일은 올릴 수 없어요"); continue; }
+      S.pending.push(f);
+    }
+    drawThumbs();
+  }
+  $("btnPick").addEventListener("click", () => $("f_files").click());
+  $("f_files").addEventListener("change", (e) => { addFiles(e.target.files); e.target.value = ""; });
+  const dz = $("dropZone");
+  dz.addEventListener("dragover", (e) => { e.preventDefault(); dz.classList.add("on"); });
+  dz.addEventListener("dragleave", () => dz.classList.remove("on"));
+  dz.addEventListener("drop", (e) => { e.preventDefault(); dz.classList.remove("on"); if (S.assets) addFiles(e.dataTransfer.files); });
+  document.addEventListener("paste", (e) => { if ($("formSheet").hidden || !S.assets) return; const files = [...(e.clipboardData && e.clipboardData.files || [])]; if (files.length) { e.preventDefault(); addFiles(files); toast("붙여넣은 그림을 담았어요"); } });
+
+  $("itemForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!S.db) { toast("지금은 저장할 수 없어요"); return; }
+    const name = $("f_name").value.trim(); if (!name) { $("f_name").focus(); toast("이름을 적어 주세요"); return; }
+    const btn = $("btnSave"); btn.disabled = true; btn.textContent = "저장 중…";
+    try {
+      const photos = S.keepPhotos.slice();
+      if (S.assets) for (const f of S.pending) { const r = await S.assets.upload(f, f.type ? undefined : { type: "image/png" }); photos.push({ id: r.id, type: r.contentType }); }
+      const old = S.editing ? S.items.find((x) => x.id === S.editing) : null;
+      const body = Object.assign({}, old || {});
+      delete body.id;
+      for (const k of F) { const key = MAP[k] || k; const v = $("f_" + k).value.trim(); body[key] = ["walk", "area", "rooms", "deposit", "rent", "mgmt", "pfee"].includes(k) ? n(v) : v; }
+      body.photos = photos;
+      body.updatedAt = new Date().toISOString();
+      if (!old) { body.createdAt = body.updatedAt; body.source = "효니"; }
+      const ref = S.editing ? S.db.doc("listings/" + S.editing) : S.db.collection("listings").doc();
+      await ref.set(body);
+      if (S.assets && S.removed) for (const pid of S.removed) { try { await S.assets.delete(pid); } catch (err) { /* 이미 없으면 넘어감 */ } }
+      S.removed = []; S.pending = [];
+      closeSheets(); toast(old ? "고쳤어요" : "올렸어요");
+    } catch (err) {
+      const code = err && err.code;
+      toast(code === "too_large" ? "파일이 너무 커요(20MB까지)" : code === "unsupported_type" ? "이 파일 형식은 올릴 수 없어요" : code === "quota_or_state" || code === "quota_exceeded" ? "저장 공간이 꽉 찼어요. 탈락한 집의 사진을 지워 주세요" : "저장하지 못했어요: " + (code || "오류"));
+    } finally { btn.disabled = false; btn.textContent = "저장"; }
+  });
+
+  /* ---------- 조건 ---------- */
+  const CF = { minArea: "c_minArea", minRooms: "c_minRooms", selfFunds: "c_self", maxDeposit: "c_maxDep", monthlyTarget: "c_monthly", rate: "c_rate", moveBy: "c_moveBy", near: "c_near" };
+  $("btnCond").addEventListener("click", () => { for (const k in CF) $(CF[k]).value = S.cond[k] == null ? "" : S.cond[k]; openSheet("condSheet"); });
+  $("condForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const next = {};
+    for (const k in CF) { const v = $(CF[k]).value.trim(); next[k] = (k === "moveBy" || k === "near") ? v : (n(v) == null ? DEFAULT_COND[k] : n(v)); }
+    S.cond = Object.assign({}, DEFAULT_COND, next); render(); closeSheets();
+    if (S.db) { try { await S.db.doc("settings/conditions").set(Object.assign({}, S.cond, { updatedAt: new Date().toISOString() })); toast("조건을 저장했어요"); } catch (err) { toast("이 화면에서만 바뀌었어요(저장 못 함)"); } }
+  });
+
+  /* ---------- 필터 ---------- */
+  document.querySelectorAll("[data-status]").forEach((b) => b.addEventListener("click", () => { S.status = b.dataset.status; document.querySelectorAll("[data-status]").forEach((x) => x.setAttribute("aria-pressed", String(x === b))); render(); }));
+  document.querySelectorAll("[data-kind]").forEach((b) => b.addEventListener("click", () => { S.kind = b.dataset.kind; document.querySelectorAll("[data-kind]").forEach((x) => x.setAttribute("aria-pressed", String(x === b))); render(); }));
+  $("sortSel").addEventListener("change", (e) => { S.sort = e.target.value; try { localStorage.setItem("hb_sort", S.sort); } catch (err) { /* 저장 안 돼도 됨 */ } render(); });
+  try { const s = localStorage.getItem("hb_sort"); if (s) { S.sort = s; $("sortSel").value = s; } } catch (err) { /* 무시 */ }
+  $("btnAdd").addEventListener("click", () => openForm(null));
+  $("btnClearCmp").addEventListener("click", () => { S.sel.clear(); render(); });
+
+  /* ---------- 저장소 연결: 구글 시트에 붙은 앱스 스크립트 웹 앱 ---------- */
+  const API = "__API_URL__"; // 배포 뒤 웹 앱 주소로 바뀐다(비밀번호는 코드에 없다)
+  const KEY_NAME = "hh_key";
+  const getKey = () => { try { return localStorage.getItem(KEY_NAME) || ""; } catch (e) { return ""; } };
+  const setKey = (k) => { try { localStorage.setItem(KEY_NAME, k); } catch (e) { /* 저장 안 돼도 이번엔 쓸 수 있음 */ } };
+  let memKey = "";
+  async function call(action, extra) {
+    if (API.indexOf("http") !== 0) { const e = new Error("백엔드 주소가 아직 없어요"); e.code = "no_api"; throw e; }
+    const r = await fetch(API, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify(Object.assign({ key: getKey() || memKey, action: action }, extra || {})) });
+    const j = await r.json();
+    if (!j.ok) { const e = new Error(j.error || "오류"); e.code = /비밀번호/.test(j.error || "") ? "bad_key" : "server"; throw e; }
+    return j;
+  }
+  const store = { items: new Map(), cond: null, itemCbs: [], condCbs: [], loaded: false, sig: "" };
+  const strip = (it) => { const o = Object.assign({}, it); delete o.id; return o; };
+  const snapItems = () => ({ docs: [...store.items.values()].map((it) => ({ id: it.id, data: () => strip(it) })), metadata: { fromCache: false } });
+  const snapCond = () => ({ exists: !!store.cond, data: () => store.cond || {} });
+  function fire() { store.itemCbs.forEach((cb) => cb(snapItems())); store.condCbs.forEach((cb) => cb(snapCond())); }
+  const fromServer = (it) => { const o = Object.assign({}, it); o.photos = Array.isArray(it.images) ? it.images : []; delete o.images; return o; };
+  const toServer = (it) => { const o = Object.assign({}, it); o.images = (Array.isArray(it.photos) ? it.photos : []).map((p) => typeof p === "string" ? p : p.id); delete o.photos; return o; };
+  const newId = () => "u" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  async function persist(it) {
+    const prev = store.items.get(it.id);
+    store.items.set(it.id, it); fire();
+    try { await call("save", { item: toServer(it) }); }
+    catch (e) { if (prev) store.items.set(it.id, prev); else store.items.delete(it.id); fire(); throw e; }
+  }
+  function docRef(path) {
+    const parts = path.split("/"), col = parts[0], id = parts[1];
+    return {
+      async set(data) {
+        if (col === "listings") await persist(Object.assign({ id: id }, data));
+        else if (col === "settings") { store.cond = data; fire(); await call("saveConditions", { cond: data }); }
+        /* dismissed: 지운 집은 줄에 deleted 표시가 남아서 따로 적지 않는다 */
+      },
+      async update(part) { await persist(Object.assign({}, store.items.get(id) || { id: id }, part)); },
+      async delete() { if (col === "listings") { store.items.delete(id); fire(); await call("remove", { id: id }); } },
+      onSnapshot(cb) { if (col === "settings") { store.condCbs.push(cb); if (store.loaded) cb(snapCond()); } }
+    };
+  }
+  const db = {
+    collection() { return { onSnapshot(cb) { store.itemCbs.push(cb); if (store.loaded) cb(snapItems()); }, doc() { return docRef("listings/" + newId()); } }; },
+    doc: docRef
+  };
+  async function refresh() {
+    const j = await call("list");
+    const sig = JSON.stringify([j.items, j.cond]);
+    store.loaded = true;
+    if (sig === store.sig) return;
+    store.sig = sig;
+    store.items = new Map((j.items || []).map((it) => [it.id, fromServer(it)]));
+    store.cond = j.cond || null;
+    fire();
+  }
+  function showGate(msg) { $("gateMsg").textContent = msg || "처음 한 번만 넣으면 이 기기에 기억해요."; $("gateSheet").hidden = false; setTimeout(() => $("gatePw").focus(), 30); }
+  $("gateForm").addEventListener("submit", (e) => { e.preventDefault(); const v = $("gatePw").value; if (!v) return; memKey = v; setKey(v); $("gateSheet").hidden = true; start(); });
+
+  let started = false;
+  async function start() {
+    const note = $("statusNote");
+    S.db = db; S.assets = null; S.canWrite = true;
+    if (!started) {
+      started = true;
+      db.collection("listings").onSnapshot((snap) => {
+        S.items = snap.docs.map((d) => Object.assign({ id: d.id }, d.data()));
+        for (const id of [...S.sel]) if (!S.items.some((x) => x.id === id)) S.sel.delete(id);
+        S.loaded = true; note.hidden = true; note.classList.remove("warn");
+        render();
+      });
+      db.doc("settings/conditions").onSnapshot((snap) => { if (snap.exists) { S.cond = Object.assign({}, DEFAULT_COND, snap.data()); render(); } });
+      setInterval(() => { if (!document.hidden && getKey()) refresh().catch(() => {}); }, 30000);
+      document.addEventListener("visibilitychange", () => { if (!document.hidden && getKey()) refresh().catch(() => {}); });
+    }
+    if (!getKey() && !memKey) { note.textContent = "비밀번호를 넣으면 목록이 보여요."; showGate(""); return; }
+    try { await refresh(); note.hidden = true; }
+    catch (e) {
+      note.hidden = false; note.classList.add("warn");
+      if (e.code === "bad_key") { try { localStorage.removeItem(KEY_NAME); } catch (x) {} memKey = ""; note.textContent = "비밀번호가 맞지 않아요."; showGate("비밀번호가 맞지 않아요. 다시 넣어 주세요."); }
+      else if (e.code === "no_api") note.textContent = "백엔드가 아직 연결되지 않았어요.";
+      else note.textContent = "목록을 불러오지 못했어요. 잠시 뒤 다시 열어 보세요.";
+      S.loaded = true; render();
+    }
+  }
+  render();
+  start();
+
+})();
+</script>
+</body></html>
