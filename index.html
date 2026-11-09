@@ -1,6 +1,12 @@
 <!doctype html>
 <html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex"><style>html,body{margin:0}</style>
 <title>집 비교판</title>
+<meta name="theme-color" content="#2f6b55">
+<meta name="apple-mobile-web-app-title" content="집 찾기">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="icon-32.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="manifest" href="manifest.webmanifest">
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap">
@@ -55,6 +61,16 @@ button { cursor: pointer; }
 
 .head { display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: flex-end; justify-content: space-between; margin-bottom: 12px; }
 .head p { margin: 4px 0 0; }
+.install-wrap { text-align: center; margin-top: 18px; }
+.install-wrap[hidden] { display: none; }
+.install-btn { background: none; border: 0; color: var(--sub); font: inherit; font-size: .85rem; text-decoration: underline; text-underline-offset: 3px; padding: 8px 14px; border-radius: 8px; cursor: pointer; }
+.install-btn:hover { color: var(--accent); }
+.inst-dlg { margin: auto; border: 0; border-radius: 14px; padding: 20px 20px 16px; max-width: 360px; width: calc(100% - 32px); box-shadow: 0 10px 40px rgba(0,0,0,.25); background: var(--surface); color: var(--ink); font-family: var(--f-body); }
+.inst-dlg::backdrop { background: rgba(10,15,12,.45); }
+.inst-dlg h3 { margin: 0 0 10px; font-size: 1.05rem; }
+.inst-dlg ol { padding-left: 20px; margin: 0 0 10px; line-height: 1.8; }
+.inst-dlg p { margin: 0 0 14px; font-size: .82rem; color: var(--sub); }
+.inst-dlg button { width: 100%; border: 0; background: var(--accent); color: #fff; border-radius: 10px; padding: 11px; font: inherit; font-weight: 600; cursor: pointer; }
 .btn { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 7px 12px; }
 .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--surface); font-weight: 600; }
 .btn.ghost { background: transparent; }
@@ -268,6 +284,9 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
     <p class="small">«+ 매물 올리기»로 직접 찾은 집을 넣거나, 월·목 아침 정기 검색이 찾은 공고·매물이 여기에 쌓여요.</p>
   </div>
   <p class="small muted" style="margin-top:12px">월 부담 = 월세 + 관리비 + 주차비 + (보증금 − 자기 돈) × 대출 금리 ÷ 12. 대출 금리와 자기 돈은 «조건 고치기»에서 바꿔요. 금액 단위는 만 원.</p>
+  <div class="install-wrap" id="installWrap" hidden>
+    <button type="button" class="install-btn" id="btnInstall">홈 화면에 추가하기</button>
+  </div>
 </div>
 
 <!-- 상세 -->
@@ -909,6 +928,40 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
   render();
   start();
 
+})();
+</script>
+<script>
+// ── 홈 화면에 추가 ──
+// 크롬(안드로이드)은 beforeinstallprompt로 설치 창, 아이폰 사파리는 «공유 → 홈 화면에 추가» 안내 창. 홈 화면에서 연 상태면 숨긴다.
+(function () {
+  var wrap = document.getElementById("installWrap"), btn = document.getElementById("btnInstall");
+  if (!wrap || !btn) return;
+  var standalone = (window.matchMedia && matchMedia("(display-mode: standalone)").matches) || window.navigator.standalone === true;
+  if (standalone) return;
+  var ua = navigator.userAgent || "";
+  var isIOS = /iPhone|iPad|iPod/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  var isAndroid = /Android/.test(ua);
+  var deferred = null;
+  window.addEventListener("beforeinstallprompt", function (e) { e.preventDefault(); deferred = e; wrap.hidden = false; });
+  window.addEventListener("appinstalled", function () { wrap.hidden = true; deferred = null; });
+  if (isIOS || isAndroid) wrap.hidden = false;
+  function steps(title, list, note) {
+    var d = document.createElement("dialog"); d.className = "inst-dlg";
+    d.innerHTML = "<h3></h3><ol></ol><p></p><button type=" + '"button"' + ">알겠어요</button>";
+    d.querySelector("h3").textContent = title;
+    var ol = d.querySelector("ol"); list.forEach(function (t) { var li = document.createElement("li"); li.textContent = t; ol.appendChild(li); });
+    d.querySelector("p").textContent = note;
+    d.querySelector("button").onclick = function () { d.close(); };
+    d.addEventListener("close", function () { d.remove(); });
+    d.addEventListener("click", function (e) { var r = d.getBoundingClientRect(); if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) d.close(); });
+    if (typeof d.showModal !== "function") { alert(title + "\n\n" + list.map(function (t, i) { return (i + 1) + ". " + t; }).join("\n") + "\n\n" + note); return; }
+    document.body.appendChild(d); d.showModal();
+  }
+  btn.addEventListener("click", function () {
+    if (deferred) { var p = deferred; deferred = null; p.prompt(); p.userChoice.then(function () { wrap.hidden = true; }); return; }
+    if (isIOS) steps("홈 화면에 추가하는 방법", ["화면 아래(또는 위)의 공유 버튼 ⬆️을 눌러요", "목록에서 «홈 화면에 추가»를 골라요", "오른쪽 위 «추가»를 누르면 끝!"], "사파리에서 열어야 보여요. 다른 앱에서 열었다면 사파리로 다시 열어 주세요.");
+    else steps("홈 화면에 추가하는 방법", ["브라우저 오른쪽 위 ⋮ 메뉴를 눌러요", "«홈 화면에 추가» 또는 «앱 설치»를 골라요", "«추가»를 누르면 끝!"], "메뉴에 안 보이면 이미 추가했거나, 크롬 브라우저가 아닐 수 있어요.");
+  });
 })();
 </script>
 </body></html>
