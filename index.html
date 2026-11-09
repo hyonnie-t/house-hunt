@@ -341,6 +341,7 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
   const DEFAULT_COND = { minArea: 33, minRooms: 2, selfFunds: 8000, maxDeposit: 33000, monthlyTarget: 100, rate: 2.5, moveBy: "2027-02-21", near: "신대방, 신사동, 보라매, 신림, 대방" };
   const S = { items: [], cond: Object.assign({}, DEFAULT_COND), status: "live", kind: "all", sort: "score", sel: new Set(), db: null, assets: null, canWrite: true, editing: null, pending: [], keepPhotos: [], loaded: false };
   const imgSrc = (p) => /^(https?:|plans\/)/.test(p) ? p : "/_blob/" + p;
+  const CM = { list: [], who: (() => { try { return localStorage.getItem("hh_who") || ""; } catch (e) { return ""; } })() };
   const $ = (id) => document.getElementById(id);
   const el = (tag, attrs, ...kids) => { const e = document.createElement(tag); if (attrs) for (const k in attrs) { if (k === "class") e.className = attrs[k]; else if (k === "text") e.textContent = attrs[k]; else if (k.startsWith("on")) e.addEventListener(k.slice(2), attrs[k]); else if (attrs[k] !== undefined && attrs[k] !== null) e.setAttribute(k, attrs[k]); } for (const c of kids) if (c != null) e.append(c); return e; };
   const n = (v) => { if (v === "" || v == null) return null; const x = Number(String(v).replace(/[, ]/g, "")); return Number.isFinite(x) ? x : null; };
@@ -403,6 +404,7 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
       el("div", { class: "small muted" },
         el("span", { class: "badge b-" + (it.kind || "매물"), text: (it.kind || "매물") + " · " + (it.deal || "–") }),
         it.source === "클로드" ? el("span", { class: "badge b-claude", text: "클로드 검색" }) : null,
+        cmtCount(it.id) ? el("span", { class: "badge", text: "의견 " + cmtCount(it.id) }) : null,
         (it.station || "") + (n(it.walkMin) != null ? " 도보 " + n(it.walkMin) + "분" : "")));
   }
   function moneyMonthly(d) { return d.rent || d.mgmt ? fmt(d.rent, 1) + " + " + fmt(d.mgmt, 1) : (d.dep == null ? "–" : "0"); }
@@ -535,6 +537,7 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
     body.append(kv, flagEls(d));
     if (it.memo) body.append(el("p", { style: "white-space:pre-wrap", text: it.memo }));
     if (it.createdAt) body.append(el("p", { class: "small muted", text: "올린 날 " + String(it.createdAt).slice(0, 10) + (it.updatedAt ? " · 고친 날 " + String(it.updatedAt).slice(0, 10) : "") }));
+    if (S.db) body.append(buildThread(it.id));
     if (S.canWrite && S.db) {
       const statusSel = el("select", { "aria-label": "상태 바꾸기", class: "btn" }, ...["후보", "관심", "신청함", "탈락"].map((s) => { const o = el("option", { text: s }); if ((it.status || "후보") === s) o.selected = true; return o; }));
       statusSel.addEventListener("change", async () => { try { await S.db.doc("listings/" + it.id).update({ status: statusSel.value, updatedAt: new Date().toISOString() }); toast("상태를 «" + statusSel.value + "»로 바꿨어요"); } catch (e) { toast("저장하지 못했어요: " + (e && e.code || "오류")); } });
@@ -691,13 +694,52 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
   };
   async function refresh() {
     const j = await call("list");
-    const sig = JSON.stringify([j.items, j.cond]);
+    const sig = JSON.stringify([j.items, j.cond, j.comments]);
     store.loaded = true;
     if (sig === store.sig) return;
     store.sig = sig;
+    CM.list = Array.isArray(j.comments) ? j.comments : [];
     store.items = new Map((j.items || []).map((it) => [it.id, fromServer(it)]));
     store.cond = j.cond || null;
     fire();
+  }
+  function cmtCount(id) { return CM.list.filter((c) => c.itemId === id).length; }
+  function buildThread(itemId) {
+    const box = el("section", { class: "thread" });
+    const inputStyle = "border:1px solid var(--line);border-radius:8px;padding:7px 9px;background:var(--bg);min-width:0";
+    const draw = () => {
+      box.replaceChildren(el("h3", { text: "둘이 남기는 의견", style: "margin:14px 0 6px;font-size:.98rem" }));
+      const list = CM.list.filter((c) => c.itemId === itemId);
+      if (!list.length) box.append(el("p", { class: "small muted", text: "아직 의견이 없어요. 아래에 적으면 둘 다 볼 수 있어요." }));
+      list.forEach((c) => {
+        const del = el("button", { class: "btn ghost small", type: "button", text: "지우기" });
+        del.addEventListener("click", async () => {
+          CM.list = CM.list.filter((x) => x.id !== c.id); draw(); render();
+          try { await call("uncomment", { id: c.id }); } catch (e) { toast("지우지 못했어요"); refresh().catch(() => {}); }
+        });
+        box.append(el("div", { style: "border-top:1px dashed var(--line);padding:6px 0" },
+          el("div", { class: "small muted" }, el("b", { text: c.who || "이름 없음" }), " · " + String(c.at || "").slice(5, 16).replace("T", " ")),
+          el("div", { style: "white-space:pre-wrap", text: c.text }), del));
+      });
+      const who = el("input", { id: "cm_who", placeholder: "내 이름", "aria-label": "내 이름", style: inputStyle + ";width:6.5em" });
+      who.value = CM.who;
+      const txt = el("input", { id: "cm_text", placeholder: "의견 한 줄 (예: 주차가 걸려)", "aria-label": "의견", style: inputStyle + ";flex:1 1 12em" });
+      const send = el("button", { class: "btn primary", type: "button", text: "남기기" });
+      const go = async () => {
+        const text = txt.value.trim(), name = who.value.trim();
+        if (!text) { txt.focus(); return; }
+        if (!name) { who.focus(); toast("이름을 적어 주세요"); return; }
+        CM.who = name; try { localStorage.setItem("hh_who", name); } catch (e) { /* 저장 안 돼도 됨 */ }
+        send.disabled = true;
+        try { const r = await call("comment", { itemId: itemId, who: name, text: text }); CM.list.push(r.comment); store.sig = ""; draw(); render(); }
+        catch (e) { toast("저장하지 못했어요"); send.disabled = false; }
+      };
+      send.addEventListener("click", go);
+      txt.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); go(); } });
+      box.append(el("div", { class: "actions" }, who, txt, send));
+    };
+    draw();
+    return box;
   }
   function showGate(msg) { $("gateMsg").textContent = msg || "처음 한 번만 넣으면 이 기기에 기억해요."; $("gateSheet").hidden = false; setTimeout(() => $("gatePw").focus(), 30); }
   $("gateForm").addEventListener("submit", (e) => { e.preventDefault(); const v = $("gatePw").value; if (!v) return; memKey = v; setKey(v); $("gateSheet").hidden = true; start(); });

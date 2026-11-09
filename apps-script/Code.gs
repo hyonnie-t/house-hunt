@@ -24,6 +24,8 @@ function doPost(e) {
       case 'save': return out_(withLock_(() => save_(d.item || {})));
       case 'remove': return out_(withLock_(() => remove_(String(d.id || ''))));
       case 'saveConditions': return out_(withLock_(() => saveCond_(d.cond || {})));
+      case 'comment': return out_(withLock_(() => comment_(d)));
+      case 'uncomment': return out_(withLock_(() => uncomment_(String(d.id || ''))));
     }
     return out_({ ok: false, error: '모르는 요청: ' + d.action });
   } catch (err) {
@@ -67,7 +69,7 @@ function rowToItem_(row) {
     if (NUM.indexOf(c) >= 0) { const n = Number(v); if (isFinite(n)) o[c] = n; return; }
     if (c === 'deleted') { o[c] = (v === true || String(v).toUpperCase() === 'TRUE'); return; }
     if (c === 'images') { try { o[c] = JSON.parse(v); } catch (e) { o[c] = String(v).split(/\s+/).filter(String); } return; }
-    if (Object.prototype.toString.call(v) === '[object Date]') v =Utilities.formatDate(v, 'Asia/Seoul', 'yyyy-MM-dd');
+    if (Object.prototype.toString.call(v) === '[object Date]') v = Utilities.formatDate(v, 'Asia/Seoul', 'yyyy-MM-dd');
     o[c] = String(v);
   });
   return o;
@@ -95,7 +97,44 @@ function list_() {
   const cs = condSheet_();
   const raw = cs.getRange(1, 1).getValue();
   if (raw) { try { cond = JSON.parse(raw); } catch (e) { cond = null; } }
-  return { ok: true, v: VERSION, items: items, cond: cond };
+  return { ok: true, v: VERSION, items: items, cond: cond, comments: comments_() };
+}
+
+// 의견(둘이 남기는 한 줄 메모): 탭 «의견», 칸 id·itemId·who·text·at·deleted. 지우기는 deleted 표시만 한다.
+const C_COLS = ['id', 'itemId', 'who', 'text', 'at', 'deleted'];
+function commentSheet_() {
+  const ss = SpreadsheetApp.getActive();
+  let sh = ss.getSheetByName('의견');
+  if (!sh) {
+    sh = ss.insertSheet('의견');
+    sh.getRange(1, 1, 1, C_COLS.length).setValues([C_COLS]).setFontWeight('bold').setBackground('#E3EFE9');
+    sh.setFrozenRows(1);
+    C_COLS.forEach((c, i) => sh.getRange(1, i + 1, sh.getMaxRows(), 1).setNumberFormat('@'));
+  }
+  return sh;
+}
+function comments_() {
+  const sh = commentSheet_();
+  const n = sh.getLastRow();
+  if (n < 2) return [];
+  return sh.getRange(2, 1, n - 1, C_COLS.length).getValues()
+    .filter((r) => r[0] && String(r[5]).toUpperCase() !== 'TRUE')
+    .map((r) => ({ id: String(r[0]), itemId: String(r[1]), who: String(r[2]), text: String(r[3]), at: String(r[4]) }));
+}
+function comment_(d) {
+  const itemId = String(d.itemId || ''), who = String(d.who || '').slice(0, 20), text = String(d.text || '').slice(0, 500);
+  if (!/^[a-z0-9-]{1,80}$/.test(itemId) || !who || !text) return { ok: false, error: '의견 내용이 올바르지 않아요' };
+  const c = { id: 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), itemId: itemId, who: who, text: text, at: new Date().toISOString() };
+  commentSheet_().appendRow([c.id, c.itemId, c.who, c.text, c.at, '']);
+  return { ok: true, comment: c };
+}
+function uncomment_(id) {
+  const sh = commentSheet_();
+  const n = sh.getLastRow();
+  if (n < 2) return { ok: true };
+  const ids = sh.getRange(2, 1, n - 1, 1).getValues();
+  for (let i = 0; i < ids.length; i++) if (String(ids[i][0]) === id) { sh.getRange(i + 2, 6).setValue('TRUE'); break; }
+  return { ok: true };
 }
 
 function findRow_(sh, id) {
