@@ -134,6 +134,19 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
   .bar { position: static; }
 }
 
+/* 순위·우선순위·별칭·중개사 */
+.rk { display: inline-block; background: var(--accent); color: var(--surface); border-radius: 6px; padding: 0 6px; font-size: .74rem; font-weight: 700; margin-right: 5px; font-family: var(--f-num); }
+.pri { display: inline-block; border-radius: 6px; padding: 0 6px; font-size: .74rem; font-weight: 700; margin-right: 5px; }
+.pri-최우선 { background: var(--no-soft); color: var(--no); }
+.pri-높음 { background: var(--warn-soft); color: var(--warn); }
+.pri-보통 { background: var(--unk-soft); color: var(--sub); }
+.pri-낮음 { background: transparent; color: var(--sub); border: 1px solid var(--line); }
+.stars { color: var(--star); letter-spacing: 1px; }
+.acard { border: 1px solid var(--line); border-radius: 10px; padding: 10px; margin-top: 10px; }
+.acard h3 { margin: 0 0 4px; font-size: 1rem; }
+.agentbox { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; margin: 10px 0; background: var(--bg); }
+.agentbox h3 { margin: 0 0 4px; font-size: .95rem; }
+
 /* 상세·입력 패널 */
 .sheet { position: fixed; inset: 0; z-index: 20; display: flex; justify-content: flex-end; background: rgba(10,15,12,.38); }
 .sheet[hidden] { display: none !important; }
@@ -175,6 +188,7 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
       <p class="muted small">2인 · 전용 10평 이상 · 방 2개 이상 · 전세 만기 <span class="num">2027-02-21</span> · 공고와 매물을 한 표에서 비교</p>
     </div>
     <div class="chips">
+      <button class="btn" id="btnAgents" type="button">중개사 정리</button>
       <button class="btn" id="btnCond" type="button">조건 고치기</button>
       <button class="btn primary" id="btnAdd" type="button">+ 매물 올리기</button>
     </div>
@@ -193,9 +207,19 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
         <button type="button" data-kind="공고" aria-pressed="false">공고</button>
         <button type="button" data-kind="매물" aria-pressed="false">매물</button>
       </div>
+      <label class="small muted" for="priSel">우선순위</label>
+      <select id="priSel">
+        <option value="all">전부</option>
+        <option value="최우선">최우선</option>
+        <option value="높음">높음</option>
+        <option value="보통">보통</option>
+        <option value="낮음">낮음</option>
+        <option value="none">미정</option>
+      </select>
       <label class="small muted" for="sortSel">정렬</label>
       <select id="sortSel">
         <option value="score">조건 맞는 순</option>
+        <option value="rank">내 순위 순</option>
         <option value="monthly">월 부담 적은 순</option>
         <option value="area">넓은 순</option>
         <option value="deposit">보증금 적은 순</option>
@@ -266,6 +290,7 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
     </div>
     <form id="itemForm" class="form" novalidate>
       <div class="field full"><label for="f_name">이름 (단지·건물명이나 알아볼 말)</label><input id="f_name" required placeholder="예: 신대방역 ○○빌라 3층"></div>
+      <div class="field full"><label for="f_alias">별칭 (우리끼리 부르는 이름)</label><input id="f_alias" placeholder="예: 햇살집, 보라매 신축"></div>
       <div class="field"><label for="f_kind">종류</label><select id="f_kind"><option>매물</option><option>공고</option></select></div>
       <div class="field"><label for="f_deal">거래</label><select id="f_deal"><option>전세</option><option>반전세</option><option>월세</option><option>공공임대</option><option>분양</option></select></div>
       <div class="field"><label for="f_station">가까운 역·동네</label><input id="f_station" placeholder="예: 신대방역, 관악구 신사동"></div>
@@ -280,6 +305,9 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
       <div class="field"><label for="f_movein">입주 가능일</label><input id="f_movein" type="date"></div>
       <div class="field"><label for="f_deadline">신청 마감 (공고)</label><input id="f_deadline" type="date"></div>
       <div class="field"><label for="f_status">상태</label><select id="f_status"><option>후보</option><option>관심</option><option>신청함</option><option>탈락</option></select></div>
+      <div class="field"><label for="f_priority">우선순위</label><select id="f_priority"><option value="">미정</option><option>최우선</option><option>높음</option><option>보통</option><option>낮음</option></select></div>
+      <div class="field"><label for="f_rank">내 순위 (1이 제일 좋음)</label><input id="f_rank" inputmode="numeric" placeholder="예: 1"></div>
+      <div class="field full"><label for="f_agent">중개사 (부동산 이름)</label><input id="f_agent" list="agentList" placeholder="예: 신대방 ○○공인"><datalist id="agentList"></datalist><span class="hint">특징은 위쪽 «중개사 정리»에서 적어요. 같은 이름이면 같은 중개사로 묶여요.</span></div>
       <div class="field full"><label for="f_link">링크</label><input id="f_link" inputmode="url" placeholder="https://"></div>
       <div class="field full"><label for="f_memo">메모 (좋은 점·걸리는 점)</label><textarea id="f_memo"></textarea></div>
       <div class="field full" id="photoField">
@@ -322,6 +350,17 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
   </div>
 </div>
 
+<div class="sheet" id="agentSheet" hidden>
+  <div class="panel" role="dialog" aria-modal="true" aria-labelledby="aTitle">
+    <div class="panel-head">
+      <h2 id="aTitle">중개사 정리</h2>
+      <button class="btn ghost" type="button" data-close>닫기</button>
+    </div>
+    <p class="hint">부동산마다 느낌·수수료·연락처를 적어 두면 어느 집을 어디서 봤는지 기억하기 좋아요. 집 입력 칸의 «중개사» 이름과 같으면 자동으로 묶여요.</p>
+    <div id="aBody"></div>
+  </div>
+</div>
+
 <div class="sheet" id="gateSheet" hidden>
   <div class="panel" role="dialog" aria-modal="true" aria-labelledby="gTitle" style="align-self:flex-start;height:auto;max-width:420px;margin:auto">
     <h2 id="gTitle">비밀번호를 넣어 주세요</h2>
@@ -339,9 +378,9 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
 (function () {
   "use strict";
   const DEFAULT_COND = { minArea: 33, minRooms: 2, selfFunds: 8000, maxDeposit: 33000, monthlyTarget: 100, rate: 2.5, moveBy: "2027-02-21", near: "신대방, 신사동, 보라매, 신림, 대방" };
-  const S = { items: [], cond: Object.assign({}, DEFAULT_COND), status: "live", kind: "all", sort: "score", sel: new Set(), db: null, assets: null, canWrite: true, editing: null, pending: [], keepPhotos: [], loaded: false };
+  const S = { items: [], cond: Object.assign({}, DEFAULT_COND), status: "live", kind: "all", sort: "score", pri: "all", sel: new Set(), db: null, assets: null, canWrite: true, editing: null, pending: [], keepPhotos: [], loaded: false };
   const imgSrc = (p) => /^(https?:|plans\/)/.test(p) ? p : "/_blob/" + p;
-  const CM = { list: [], who: (() => { try { return localStorage.getItem("hh_who") || ""; } catch (e) { return ""; } })() };
+  const CM = { list: [], agents: [], who: (() => { try { return localStorage.getItem("hh_who") || ""; } catch (e) { return ""; } })() };
   const $ = (id) => document.getElementById(id);
   const el = (tag, attrs, ...kids) => { const e = document.createElement(tag); if (attrs) for (const k in attrs) { if (k === "class") e.className = attrs[k]; else if (k === "text") e.textContent = attrs[k]; else if (k.startsWith("on")) e.addEventListener(k.slice(2), attrs[k]); else if (attrs[k] !== undefined && attrs[k] !== null) e.setAttribute(k, attrs[k]); } for (const c of kids) if (c != null) e.append(c); return e; };
   const n = (v) => { if (v === "" || v == null) return null; const x = Number(String(v).replace(/[, ]/g, "")); return Number.isFinite(x) ? x : null; };
@@ -349,6 +388,18 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
   const py = (m2) => m2 == null ? null : m2 / 3.3058;
   const safeUrl = (u) => { try { const x = new URL(u); return (x.protocol === "https:" || x.protocol === "http:") ? x.href : null; } catch (e) { return null; } };
   function toast(msg) { const t = $("toast"); t.textContent = msg; t.hidden = false; clearTimeout(toast._t); toast._t = setTimeout(() => { t.hidden = true; }, 2600); }
+
+  /* ---------- 별칭·순위·중개사 도우미 ---------- */
+  const PRI_ORDER = { "최우선": 0, "높음": 1, "보통": 2, "낮음": 3 };
+  const dispName = (it) => it.alias || it.name || "(이름 없음)";
+  function rankEls(it) { return [n(it.rank) ? el("span", { class: "rk", text: n(it.rank) + "위" }) : null, it.priority ? el("span", { class: "pri pri-" + it.priority, text: it.priority }) : null]; }
+  const stars = (r) => r ? "★".repeat(r) + "☆".repeat(5 - r) : "별점 없음";
+  const agentOf = (name) => CM.agents.find((a) => a.name === name);
+  function fillAgentList() {
+    const dl = $("agentList"); if (!dl) return;
+    const names = [...new Set([...CM.agents.map((a) => a.name), ...S.items.map((x) => x.agent).filter(Boolean)])];
+    dl.replaceChildren(...names.map((v) => el("option", { value: v })));
+  }
 
   /* ---------- 계산 ---------- */
   function derive(it) {
@@ -383,9 +434,12 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
     if (S.status === "live") list = list.filter((x) => x.it.status !== "탈락");
     else if (S.status === "탈락") list = list.filter((x) => x.it.status === "탈락");
     if (S.kind !== "all") list = list.filter((x) => (x.it.kind || "매물") === S.kind);
+    if (S.pri === "none") list = list.filter((x) => !x.it.priority);
+    else if (S.pri !== "all") list = list.filter((x) => x.it.priority === S.pri);
     const big = 1e12;
     const key = {
       score: (x) => -(x.d.score - (x.d.hardFail ? 10 : 0)),
+      rank: (x) => (n(x.it.rank) == null ? big : n(x.it.rank)) * 10 + (PRI_ORDER[x.it.priority] == null ? 5 : PRI_ORDER[x.it.priority]),
       monthly: (x) => x.d.monthly == null ? big : x.d.monthly,
       area: (x) => x.d.area == null ? big : -x.d.area,
       deposit: (x) => x.d.dep == null ? big : x.d.dep,
@@ -400,12 +454,14 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
   function flagEls(d) { return el("div", { class: "flags" }, ...d.flags.map((f) => el("span", { class: "f " + f[0], text: f[1] })), d.isNear ? el("span", { class: "f ok", text: "★ 가까운 동네" }) : null); }
   function nameEls(it, d) {
     return el("div", null,
-      el("div", { class: "name" }, d.isNear ? el("span", { class: "star", text: "★ " }) : null, it.name || "(이름 없음)"),
+      el("div", { class: "name" }, ...rankEls(it), d.isNear ? el("span", { class: "star", text: "★ " }) : null, dispName(it)),
+      it.alias && it.name ? el("div", { class: "small muted", text: it.name }) : null,
       el("div", { class: "small muted" },
         el("span", { class: "badge b-" + (it.kind || "매물"), text: (it.kind || "매물") + " · " + (it.deal || "–") }),
         it.source === "클로드" ? el("span", { class: "badge b-claude", text: "클로드 검색" }) : null,
         cmtCount(it.id) ? el("span", { class: "badge", text: "의견 " + cmtCount(it.id) }) : null,
-        (it.station || "") + (n(it.walkMin) != null ? " 도보 " + n(it.walkMin) + "분" : "")));
+        (it.station || "") + (n(it.walkMin) != null ? " 도보 " + n(it.walkMin) + "분" : ""),
+        it.agent ? el("span", { class: "muted", text: " · " + it.agent }) : null));
   }
   function moneyMonthly(d) { return d.rent || d.mgmt ? fmt(d.rent, 1) + " + " + fmt(d.mgmt, 1) : (d.dep == null ? "–" : "0"); }
   function dateLine(it) {
@@ -427,12 +483,13 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
       el("span", { class: "chip" }, "만기 ", el("b", { class: "num", text: c.moveBy })),
       el("span", { class: "chip" }, "★ ", c.near));
     const list = visibleItems();
+    fillAgentList();
     $("countLbl").textContent = list.length + "곳 표시 · 전체 " + S.items.length + "곳";
     const rows = $("rows"), cards = $("cards");
     rows.replaceChildren(); cards.replaceChildren();
     list.forEach((x, i) => {
       const { it, d } = x;
-      const cb = el("input", { type: "checkbox", "aria-label": (it.name || "") + " 나란히 보기에 넣기" });
+      const cb = el("input", { type: "checkbox", "aria-label": dispName(it) + " 나란히 보기에 넣기" });
       cb.checked = S.sel.has(it.id);
       cb.addEventListener("click", (e) => e.stopPropagation());
       cb.addEventListener("change", () => { if (cb.checked) S.sel.add(it.id); else S.sel.delete(it.id); renderCompare(); });
@@ -489,7 +546,7 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
     ];
     const grid = $("compareGrid"); grid.replaceChildren();
     ds.forEach((x) => {
-      const col = el("div", { class: "cmp-col" }, el("h3", { text: x.it.name || "" }), el("div", { class: "small muted", style: "margin-bottom:6px", text: (x.it.kind || "매물") + " · " + (x.it.deal || "") + " · " + (x.it.station || "") }));
+      const col = el("div", { class: "cmp-col" }, el("h3", { text: dispName(x.it) }), el("div", { class: "small muted", style: "margin-bottom:6px", text: (x.it.kind || "매물") + " · " + (x.it.deal || "") + " · " + (x.it.station || "") }));
       metrics.forEach(([label, get, dir, show]) => {
         const v = get(x); const vals = ds.map(get).filter((t) => t != null);
         const allSame = vals.every((t) => t === vals[0]);
@@ -497,6 +554,8 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
         col.append(el("div", { class: "cmp-row" }, el("span", { class: "muted", text: label }), el("span", { class: "num" + (best ? " best" : ""), text: v == null ? "–" : show(v) })));
       });
       col.append(el("div", { class: "cmp-row" }, el("span", { class: "muted", text: "주차" }), el("span", { text: x.it.parking || "미확인" })));
+      col.append(el("div", { class: "cmp-row" }, el("span", { class: "muted", text: "순위·우선순위" }), el("span", { text: (n(x.it.rank) ? n(x.it.rank) + "위" : "–") + " · " + (x.it.priority || "미정") })));
+      col.append(el("div", { class: "cmp-row" }, el("span", { class: "muted", text: "중개사" }), el("span", { class: "small", text: x.it.agent || "–" })));
       col.append(el("div", { class: "cmp-row" }, el("span", { class: "muted", text: "입주·마감" }), el("span", { class: "small", text: dateLine(x.it) })));
       col.append(el("div", { style: "margin-top:6px" }, flagEls(x.d)));
       grid.append(col);
@@ -506,7 +565,7 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
 
   /* ---------- 상세 ---------- */
   function openSheet(id) { const s = $(id); s.hidden = false; const f = s.querySelector("input,select,textarea,button"); if (f) setTimeout(() => f.focus(), 30); }
-  function closeSheets() { for (const id of ["detailSheet", "formSheet", "condSheet"]) $(id).hidden = true; }
+  function closeSheets() { for (const id of ["detailSheet", "formSheet", "condSheet", "agentSheet"]) $(id).hidden = true; }
   document.querySelectorAll("[data-close]").forEach((b) => b.addEventListener("click", closeSheets));
   document.querySelectorAll(".sheet").forEach((s) => s.addEventListener("click", (e) => { if (e.target === s) closeSheets(); }));
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeSheets(); });
@@ -514,7 +573,7 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
   function openDetail(id) {
     const it = S.items.find((x) => x.id === id); if (!it) return;
     const d = derive(it);
-    $("dTitle").textContent = it.name || "";
+    $("dTitle").textContent = dispName(it);
     const body = $("dBody"); body.replaceChildren();
     const photos = Array.isArray(it.photos) ? it.photos : [];
     if (photos.length) {
@@ -524,6 +583,7 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
     }
     const link = safeUrl(it.link || "");
     const kv = el("div", { class: "kv" },
+      ...(it.alias ? [el("div", { text: "정식 이름" }), el("div", { text: it.name || "–" })] : []),
       el("div", { text: "종류" }), el("div", { text: (it.kind || "매물") + " · " + (it.deal || "–") + (it.source === "클로드" ? " · 클로드 검색" : "") }),
       el("div", { text: "위치" }), el("div", { text: (it.station || "–") + (n(it.walkMin) != null ? " · 도보 " + n(it.walkMin) + "분" : "") + (it.address ? " · " + it.address : "") }),
       el("div", { text: "전용·방" }), el("div", { class: "num", text: (d.area == null ? "–" : fmt(d.area, 2) + "㎡ (" + fmt(py(d.area), 1) + "평)") + " · 방 " + (d.rooms ?? "–") + (it.baths ? " · 욕실 " + it.baths : "") }),
@@ -533,8 +593,10 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
       el("div", { text: "주차" }), el("div", { text: it.parking || "미확인" }),
       el("div", { text: "입주·마감" }), el("div", { text: dateLine(it) }),
       el("div", { text: "상태" }), el("div", null, el("span", { class: "st st-" + (it.status || "후보"), text: it.status || "후보" })),
+      el("div", { text: "순위" }), el("div", { text: (n(it.rank) ? n(it.rank) + "위" : "–") + " · 우선순위 " + (it.priority || "미정") }),
       el("div", { text: "링크" }), el("div", null, link ? el("a", { href: link, target: "_blank", rel: "noopener", text: "열기 ↗" }) : el("span", { class: "muted", text: "없음" })));
     body.append(kv, flagEls(d));
+    if (it.agent) body.append(agentBlock(it));
     if (it.memo) body.append(el("p", { style: "white-space:pre-wrap", text: it.memo }));
     if (it.createdAt) body.append(el("p", { class: "small muted", text: "올린 날 " + String(it.createdAt).slice(0, 10) + (it.updatedAt ? " · 고친 날 " + String(it.updatedAt).slice(0, 10) : "") }));
     if (S.db) body.append(buildThread(it.id));
@@ -543,7 +605,12 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
       statusSel.addEventListener("change", async () => { try { await S.db.doc("listings/" + it.id).update({ status: statusSel.value, updatedAt: new Date().toISOString() }); toast("상태를 «" + statusSel.value + "»로 바꿨어요"); } catch (e) { toast("저장하지 못했어요: " + (e && e.code || "오류")); } });
       const edit = el("button", { class: "btn", type: "button", text: "고치기", onclick: () => openForm(it.id) });
       const del = el("button", { class: "btn danger", type: "button", text: "지우기" });
-      const actions = el("div", { class: "actions" }, statusSel, edit, del);
+      const priSelEl = el("select", { "aria-label": "우선순위 바꾸기", class: "btn" }, ...["", "최우선", "높음", "보통", "낮음"].map((p) => { const o = el("option", { text: p || "우선순위 미정", value: p }); if ((it.priority || "") === p) o.selected = true; return o; }));
+      priSelEl.addEventListener("change", async () => { try { await S.db.doc("listings/" + it.id).update({ priority: priSelEl.value, updatedAt: new Date().toISOString() }); toast("우선순위를 «" + (priSelEl.value || "미정") + "»로 바꿨어요"); } catch (e) { toast("저장하지 못했어요: " + (e && e.code || "오류")); } });
+      const rankIn = el("input", { type: "number", min: "1", step: "1", inputmode: "numeric", "aria-label": "내 순위", placeholder: "순위", class: "btn", style: "width:5.5em" });
+      rankIn.value = n(it.rank) || "";
+      rankIn.addEventListener("change", async () => { const v = n(rankIn.value); try { await S.db.doc("listings/" + it.id).update({ rank: v, updatedAt: new Date().toISOString() }); toast(v ? "순위를 " + v + "위로 적었어요" : "순위를 비웠어요"); } catch (e) { toast("저장하지 못했어요: " + (e && e.code || "오류")); } });
+      const actions = el("div", { class: "actions" }, rankIn, priSelEl, statusSel, edit, del);
       del.addEventListener("click", () => {
         if (actions.querySelector(".confirm")) return;
         const yes = el("button", { class: "btn danger", type: "button", text: "네, 지울게요" });
@@ -568,7 +635,7 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
   }
 
   /* ---------- 입력 ---------- */
-  const F = ["name", "kind", "deal", "station", "walk", "area", "rooms", "deposit", "rent", "mgmt", "parking", "pfee", "movein", "deadline", "status", "link", "memo"];
+  const F = ["name", "alias", "kind", "deal", "station", "walk", "area", "rooms", "deposit", "rent", "mgmt", "parking", "pfee", "movein", "deadline", "status", "link", "memo", "priority", "rank", "agent"];
   const MAP = { walk: "walkMin", pfee: "parkingFee", movein: "moveIn" };
   function openForm(id) {
     closeSheets();
@@ -613,7 +680,7 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
       const old = S.editing ? S.items.find((x) => x.id === S.editing) : null;
       const body = Object.assign({}, old || {});
       delete body.id;
-      for (const k of F) { const key = MAP[k] || k; const v = $("f_" + k).value.trim(); body[key] = ["walk", "area", "rooms", "deposit", "rent", "mgmt", "pfee"].includes(k) ? n(v) : v; }
+      for (const k of F) { const key = MAP[k] || k; const v = $("f_" + k).value.trim(); body[key] = ["walk", "area", "rooms", "deposit", "rent", "mgmt", "pfee", "rank"].includes(k) ? n(v) : v; }
       body.photos = photos;
       body.updatedAt = new Date().toISOString();
       if (!old) { body.createdAt = body.updatedAt; body.source = "효니"; }
@@ -642,6 +709,7 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
   /* ---------- 필터 ---------- */
   document.querySelectorAll("[data-status]").forEach((b) => b.addEventListener("click", () => { S.status = b.dataset.status; document.querySelectorAll("[data-status]").forEach((x) => x.setAttribute("aria-pressed", String(x === b))); render(); }));
   document.querySelectorAll("[data-kind]").forEach((b) => b.addEventListener("click", () => { S.kind = b.dataset.kind; document.querySelectorAll("[data-kind]").forEach((x) => x.setAttribute("aria-pressed", String(x === b))); render(); }));
+  $("priSel").addEventListener("change", (e) => { S.pri = e.target.value; render(); });
   $("sortSel").addEventListener("change", (e) => { S.sort = e.target.value; try { localStorage.setItem("hb_sort", S.sort); } catch (err) { /* 저장 안 돼도 됨 */ } render(); });
   try { const s = localStorage.getItem("hb_sort"); if (s) { S.sort = s; $("sortSel").value = s; } } catch (err) { /* 무시 */ }
   $("btnAdd").addEventListener("click", () => openForm(null));
@@ -694,11 +762,12 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
   };
   async function refresh() {
     const j = await call("list");
-    const sig = JSON.stringify([j.items, j.cond, j.comments]);
+    const sig = JSON.stringify([j.items, j.cond, j.comments, j.agents]);
     store.loaded = true;
     if (sig === store.sig) return;
     store.sig = sig;
     CM.list = Array.isArray(j.comments) ? j.comments : [];
+    CM.agents = Array.isArray(j.agents) ? j.agents : [];
     store.items = new Map((j.items || []).map((it) => [it.id, fromServer(it)]));
     store.cond = j.cond || null;
     fire();
@@ -741,6 +810,73 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
     draw();
     return box;
   }
+  function agentBlock(it) {
+    const a = agentOf(it.agent);
+    const box = el("section", { class: "agentbox" }, el("h3", { text: "중개사 · " + it.agent }));
+    if (a) {
+      box.append(el("div", { class: "small" }, el("span", { class: "stars", text: stars(a.rating) }), a.tel ? " · " + a.tel : ""));
+      if (a.note) box.append(el("div", { style: "white-space:pre-wrap;margin-top:4px", text: a.note }));
+    } else box.append(el("div", { class: "small muted", text: "아직 특징을 정리하지 않았어요." }));
+    box.append(el("div", { class: "actions", style: "margin-top:8px" }, el("button", { class: "btn", type: "button", text: a ? "중개사 정보 보기·고치기" : "특징 적기", onclick: () => openAgents(it.agent) })));
+    return box;
+  }
+  function openAgents(editName) { closeSheets(); drawAgents(editName || null, false); openSheet("agentSheet"); }
+  function drawAgents(editName, adding) {
+    const body = $("aBody"); body.replaceChildren();
+    const addBtn = el("button", { class: "btn primary", type: "button", text: "+ 중개사 추가" });
+    addBtn.addEventListener("click", () => drawAgents(null, true));
+    body.append(el("div", { class: "actions" }, addBtn));
+    if (adding) body.append(agentForm(null, ""));
+    const names = [...new Set([...CM.agents.map((a) => a.name), ...S.items.map((x) => x.agent).filter(Boolean)])];
+    if (!names.length && !adding) body.append(el("p", { class: "empty small", text: "아직 정리한 중개사가 없어요. «+ 중개사 추가»로 시작하세요." }));
+    names.forEach((name) => {
+      const a = agentOf(name);
+      if (editName === name) { body.append(agentForm(a, name)); return; }
+      const homes = S.items.filter((x) => x.agent === name);
+      const card = el("div", { class: "acard" },
+        el("h3", { text: name }),
+        el("div", { class: "small" }, el("span", { class: "stars", text: stars(a ? a.rating : 0) }), a && a.tel ? " · " + a.tel : ""));
+      if (a && a.note) card.append(el("div", { style: "white-space:pre-wrap;margin-top:4px", text: a.note }));
+      else card.append(el("div", { class: "small muted", text: a ? "특징 메모 없음" : "아직 특징을 정리하지 않았어요" }));
+      if (homes.length) {
+        const row = el("div", { class: "small", style: "margin-top:6px" }, el("span", { class: "muted", text: "이 중개사의 집 " + homes.length + "곳: " }));
+        homes.forEach((h, i) => { row.append(i ? ", " : "", el("a", { href: "#", text: dispName(h), onclick: (e) => { e.preventDefault(); closeSheets(); openDetail(h.id); } })); });
+        card.append(row);
+      }
+      card.append(el("div", { class: "actions", style: "margin-top:8px" }, el("button", { class: "btn", type: "button", text: a ? "고치기" : "특징 적기", onclick: () => drawAgents(name, false) })));
+      body.append(card);
+    });
+  }
+  function agentForm(a, name) {
+    const nameIn = el("input", { id: "ag_name", placeholder: "예: 신대방 ○○공인", "aria-label": "중개사 이름" });
+    nameIn.value = a ? a.name : name; if (a || name) nameIn.readOnly = true;
+    const tel = el("input", { id: "ag_tel", inputmode: "tel", placeholder: "연락처", "aria-label": "연락처" }); tel.value = a ? a.tel : "";
+    const rate = el("select", { id: "ag_rating", "aria-label": "느낌 점수" }, ...[0, 1, 2, 3, 4, 5].map((r) => { const o = el("option", { value: String(r), text: r ? stars(r) : "별점 없음" }); if ((a ? a.rating : 0) === r) o.selected = true; return o; }));
+    const note = el("textarea", { id: "ag_note", placeholder: "특징: 친절한지, 연락 빠른지, 수수료, 집 상태를 솔직히 말하는지 등", "aria-label": "특징" }); note.value = a ? a.note : "";
+    const save = el("button", { class: "btn primary", type: "button", text: "저장" });
+    const cancel = el("button", { class: "btn ghost", type: "button", text: "취소", onclick: () => drawAgents(null, false) });
+    const form = el("div", { class: "acard" },
+      el("div", { class: "field" }, el("label", { for: "ag_name", text: "중개사 이름" }), nameIn),
+      el("div", { class: "field" }, el("label", { for: "ag_tel", text: "연락처" }), tel),
+      el("div", { class: "field" }, el("label", { for: "ag_rating", text: "느낌 점수" }), rate),
+      el("div", { class: "field" }, el("label", { for: "ag_note", text: "특징" }), note),
+      el("div", { class: "actions" }, save, cancel));
+    if (a) {
+      const del = el("button", { class: "btn danger", type: "button", text: "정리 지우기" });
+      del.addEventListener("click", async () => { try { await call("removeAgent", { id: a.id }); CM.agents = CM.agents.filter((x) => x.id !== a.id); store.sig = ""; drawAgents(null, false); render(); toast("중개사 정리를 지웠어요(집의 중개사 이름은 그대로예요)"); } catch (e) { toast("지우지 못했어요"); } });
+      form.querySelector(".actions").append(del);
+    }
+    save.addEventListener("click", async () => {
+      const nm = nameIn.value.trim(); if (!nm) { nameIn.focus(); toast("중개사 이름을 적어 주세요"); return; }
+      if (!a && agentOf(nm)) { toast("이미 있는 중개사예요. 목록에서 고쳐 주세요"); return; }
+      const rec = { id: a ? a.id : "g" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), name: nm, tel: tel.value.trim(), rating: Number(rate.value) || 0, note: note.value.trim() };
+      save.disabled = true;
+      try { await call("saveAgent", { agent: rec }); CM.agents = CM.agents.filter((x) => x.id !== rec.id).concat([rec]); store.sig = ""; drawAgents(null, false); render(); toast("중개사 정리를 저장했어요"); }
+      catch (e) { save.disabled = false; toast("저장하지 못했어요"); }
+    });
+    return form;
+  }
+  $("btnAgents").addEventListener("click", () => openAgents(null));
   function showGate(msg) { $("gateMsg").textContent = msg || "처음 한 번만 넣으면 이 기기에 기억해요."; $("gateSheet").hidden = false; setTimeout(() => $("gatePw").focus(), 30); }
   $("gateForm").addEventListener("submit", (e) => { e.preventDefault(); const v = $("gatePw").value; if (!v) return; memKey = v; setKey(v); $("gateSheet").hidden = true; start(); });
 
