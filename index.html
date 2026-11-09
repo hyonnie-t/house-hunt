@@ -645,7 +645,7 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
   $("btnClearCmp").addEventListener("click", () => { S.sel.clear(); render(); });
 
   /* ---------- 저장소 연결: 구글 시트에 붙은 앱스 스크립트 웹 앱 ---------- */
-  const API = "__API_URL__"; // 배포 뒤 웹 앱 주소로 바뀐다(비밀번호는 코드에 없다)
+  const API = "https://script.google.com/macros/s/AKfycbxdNoRPF8Hg-9r_iZwVbhkvZijJMZcrpIJv92cUTmuBrwyCRkkiL7LUOAeWnnoDXaPw/exec"; // 배포 뒤 웹 앱 주소로 바뀐다(비밀번호는 코드에 없다)
   const KEY_NAME = "hh_key";
   const getKey = () => { try { return localStorage.getItem(KEY_NAME) || ""; } catch (e) { return ""; } };
   const setKey = (k) => { try { localStorage.setItem(KEY_NAME, k); } catch (e) { /* 저장 안 돼도 이번엔 쓸 수 있음 */ } };
