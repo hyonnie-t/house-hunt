@@ -67,7 +67,7 @@ function rowToItem_(row) {
     if (NUM.indexOf(c) >= 0) { const n = Number(v); if (isFinite(n)) o[c] = n; return; }
     if (c === 'deleted') { o[c] = (v === true || String(v).toUpperCase() === 'TRUE'); return; }
     if (c === 'images') { try { o[c] = JSON.parse(v); } catch (e) { o[c] = String(v).split(/\s+/).filter(String); } return; }
-    if (v instanceof Date) v = Utilities.formatDate(v, 'Asia/Seoul', 'yyyy-MM-dd');
+    if (Object.prototype.toString.call(v) === '[object Date]') v =Utilities.formatDate(v, 'Asia/Seoul', 'yyyy-MM-dd');
     o[c] = String(v);
   });
   return o;

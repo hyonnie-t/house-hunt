@@ -662,7 +662,8 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
   const snapItems = () => ({ docs: [...store.items.values()].map((it) => ({ id: it.id, data: () => strip(it) })), metadata: { fromCache: false } });
   const snapCond = () => ({ exists: !!store.cond, data: () => store.cond || {} });
   function fire() { store.itemCbs.forEach((cb) => cb(snapItems())); store.condCbs.forEach((cb) => cb(snapCond())); }
-  const fromServer = (it) => { const o = Object.assign({}, it); o.photos = Array.isArray(it.images) ? it.images : []; delete o.images; return o; };
+  const fixDate = (v) => { if (typeof v === "string" && /GMT/.test(v)) { const d = new Date(v); if (!isNaN(d)) return d.toLocaleDateString("sv-SE", { timeZone: "Asia/Seoul" }); } return v; };
+  const fromServer = (it) => { const o = Object.assign({}, it); ["moveIn", "deadline"].forEach((k) => { if (o[k]) o[k] = fixDate(o[k]); }); o.photos = Array.isArray(it.images) ? it.images : []; delete o.images; return o; };
   const toServer = (it) => { const o = Object.assign({}, it); o.images = (Array.isArray(it.photos) ? it.photos : []).map((p) => typeof p === "string" ? p : p.id); delete o.photos; return o; };
   const newId = () => "u" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   async function persist(it) {
