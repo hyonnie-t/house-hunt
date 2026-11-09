@@ -60,6 +60,11 @@ button { cursor: pointer; }
 .btn.ghost { background: transparent; }
 .btn.danger { color: var(--no); border-color: var(--no); background: transparent; }
 .btn:disabled { opacity: .5; cursor: not-allowed; }
+/* 새로고침 버튼: 44px 터치 영역, 누르면 아이콘이 한 바퀴 (아이콘 도형: Lucian Icons refresh, MIT © 2026 Lucian) */
+.btn.icon { width: 44px; height: 44px; padding: 0; display: inline-flex; align-items: center; justify-content: center; flex: none; }
+.btn.icon svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.btn.icon.spin svg { animation: hhspin .6s ease-in-out both; }
+@keyframes hhspin { to { transform: rotate(360deg); } }
 
 /* 조건 띠 (sticky) */
 .bar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); padding-block: 8px; border-bottom: 1px solid var(--line); margin-bottom: 14px; }
@@ -188,6 +193,7 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
       <p class="muted small">2인 · 전용 10평 이상 · 방 2개 이상 · 전세 만기 <span class="num">2027-02-21</span> · 공고와 매물을 한 표에서 비교</p>
     </div>
     <div class="chips">
+      <button class="btn icon" id="btnReload" type="button" aria-label="새로고침" title="새로고침"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 0 1 13.66-5.66L20 8.5"/><path d="M20 3.5v5h-5"/><path d="M20 12a8 8 0 0 1-13.66 5.66L4 15.5"/><path d="M4 20.5v-5h5"/></svg></button>
       <button class="btn" id="btnAgents" type="button">중개사 정리</button>
       <button class="btn" id="btnCond" type="button">조건 고치기</button>
       <button class="btn primary" id="btnAdd" type="button">+ 매물 올리기</button>
@@ -369,6 +375,17 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
       <p class="hint full" id="gateMsg">처음 한 번만 넣으면 이 기기에 기억해요.</p>
       <div class="actions full"><button class="btn primary" type="submit">들어가기</button></div>
     </form>
+  </div>
+</div>
+
+<div class="sheet" id="reloadSheet" hidden style="z-index:40">
+  <div class="panel" role="alertdialog" aria-modal="true" aria-labelledby="rTitle" style="align-self:center;height:auto;max-width:380px;margin:auto;border-radius:12px">
+    <h2 id="rTitle">새로고침할까요?</h2>
+    <p class="small muted">열려 있는 창에 적던 내용은 저장되지 않고 사라져요.</p>
+    <div class="actions" style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
+      <button class="btn ghost" type="button" id="rlNo">계속 쓰기</button>
+      <button class="btn primary" type="button" id="rlYes">새로고침</button>
+    </div>
   </div>
 </div>
 
@@ -877,6 +894,20 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
     return form;
   }
   $("btnAgents").addEventListener("click", () => openAgents(null));
+  // 새로고침: 새 버전·최신 데이터를 다시 불러온다. 열린 창(입력 중일 수 있음)이 있으면 앱 안 창으로 한 번 묻는다.
+  function doReload() {
+    const b = $("btnReload"); b.classList.remove("spin"); void b.offsetWidth; b.classList.add("spin");
+    const u = new URL(location.href); u.searchParams.set("r", String(Date.now())); // 기존 주소 값·해시는 그대로 두고 r만 바꿔 브라우저 캐시를 피함
+    setTimeout(() => location.replace(u.toString()), 350);
+  }
+  $("btnReload").addEventListener("click", () => {
+    const open = ["detailSheet", "formSheet", "condSheet", "agentSheet"].some((id) => !$(id).hidden);
+    if (open) { $("reloadSheet").hidden = false; $("rlNo").focus(); } else doReload();
+  });
+  $("rlNo").addEventListener("click", () => { $("reloadSheet").hidden = true; });
+  $("rlYes").addEventListener("click", () => { $("reloadSheet").hidden = true; doReload(); });
+  $("reloadSheet").addEventListener("click", (e) => { if (e.target === $("reloadSheet")) $("reloadSheet").hidden = true; });
+  try { const cu = new URL(location.href); if (cu.searchParams.has("r")) { cu.searchParams.delete("r"); history.replaceState(null, "", cu.pathname + cu.search + cu.hash); } } catch (e) { /* 주소 정리는 못 해도 괜찮음 */ }
   function showGate(msg) { $("gateMsg").textContent = msg || "처음 한 번만 넣으면 이 기기에 기억해요."; $("gateSheet").hidden = false; setTimeout(() => $("gatePw").focus(), 30); }
   $("gateForm").addEventListener("submit", (e) => { e.preventDefault(); const v = $("gatePw").value; if (!v) return; memKey = v; setKey(v); $("gateSheet").hidden = true; start(); });
 
