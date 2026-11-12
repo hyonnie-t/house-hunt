@@ -753,7 +753,7 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
   $("btnClearCmp").addEventListener("click", () => { S.sel.clear(); render(); });
 
   /* ---------- 저장소 연결: 구글 시트에 붙은 앱스 스크립트 웹 앱 ---------- */
-  const API = "https://script.google.com/macros/s/AKfycbxdNoRPF8Hg-9r_iZwVbhkvZijJMZcrpIJv92cUTmuBrwyCRkkiL7LUOAeWnnoDXaPw/exec"; // 배포 뒤 웹 앱 주소로 바뀐다(비밀번호는 코드에 없다)
+  const API = "https://script.google.com/macros/s/AKfycbxdNoRPF8Hg-9r_iZwVbhkvZijJMZcrpIJv92cUTmuBrwyCRkkiL7LUOAeWnnoDXaPw/exec"; // 웹 앱 주소(새 버전 배포 때도 deployments.update로 같은 주소 유지, 비밀번호는 코드에 없다)
   const KEY_NAME = "hh_key";
   const getKey = () => { try { return localStorage.getItem(KEY_NAME) || ""; } catch (e) { return ""; } };
   const setKey = (k) => { try { localStorage.setItem(KEY_NAME, k); } catch (e) { /* 저장 안 돼도 이번엔 쓸 수 있음 */ } };
@@ -916,13 +916,15 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
   $("btnAgents").addEventListener("click", () => openAgents(null));
   // 새로고침: 새 버전·최신 데이터를 다시 불러온다. 열린 창(입력 중일 수 있음)이 있으면 앱 안 창으로 한 번 묻는다.
   function doReload() {
+    // 서비스워커·앱 캐시가 없는 앱이라 인터넷이 끊긴 채 다시 불러오면 브라우저 오류 화면이 된다(지울 캐시도 없다)
+    if (navigator.onLine === false) { toast("인터넷이 끊겨 있어요. 연결되면 다시 눌러 주세요"); return; }
     const b = $("btnReload"); b.classList.remove("spin"); void b.offsetWidth; b.classList.add("spin");
     const u = new URL(location.href); u.searchParams.set("r", String(Date.now())); // 기존 주소 값·해시는 그대로 두고 r만 바꿔 브라우저 캐시를 피함
     setTimeout(() => location.replace(u.toString()), 350);
   }
   $("btnReload").addEventListener("click", () => {
     const open = ["detailSheet", "formSheet", "condSheet", "agentSheet"].some((id) => !$(id).hidden);
-    if (open) { $("reloadSheet").hidden = false; $("rlNo").focus(); } else doReload();
+    if (open && navigator.onLine !== false) { $("reloadSheet").hidden = false; $("rlNo").focus(); } else doReload();
   });
   $("rlNo").addEventListener("click", () => { $("reloadSheet").hidden = true; });
   $("rlYes").addEventListener("click", () => { $("reloadSheet").hidden = true; doReload(); });
