@@ -324,7 +324,7 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
       <div class="field full quick" id="quickBox">
         <label for="f_quick">빠른 입력: 링크나 공유 글 붙여넣기</label>
         <textarea id="f_quick" placeholder="네이버 부동산·당근·다방·직방에서 «공유»로 복사한 글이나 링크를 그대로 붙여넣어요"></textarea>
-        <div class="actions"><button class="btn primary" type="button" id="btnQuick">칸 채우기</button><span class="hint" id="quickMsg">읽은 값은 빈 칸에만 들어가요. 못 채운 칸은 매일 아침 클로드가 링크를 열어 채워요(네이버는 사이트가 막혀 있어 공유 글에 있는 값만).</span></div>
+        <div class="actions"><button class="btn primary" type="button" id="btnQuick">칸 채우기</button><span class="hint" id="quickMsg">읽은 값은 빈 칸에만 들어가요. 못 채운 칸은 매일 아침 클로드가 링크를 열어 채워요(네이버는 링크 대신 매물 화면 글을 길게 눌러 복사해 붙여넣으면 바로 채워져요).</span></div>
       </div>
       <div class="field full"><label for="f_name">이름 (단지·건물명이나 알아볼 말)</label><input id="f_name" required placeholder="예: 신대방역 ○○빌라 3층"></div>
       <div class="field full"><label for="f_alias">별칭 (우리끼리 부르는 이름)</label><input id="f_alias" placeholder="예: 햇살집, 보라매 신축"></div>
@@ -715,6 +715,15 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
     if (url) { o.link = url.replace(/[)\].,]+$/, ""); const s = siteOf(o.link); o.site = s.site; o.qid = s.id; }
     const body = url ? t.replace(url, " ") : t;
     let m;
+    // 네이버 부동산 매물 화면을 길게 눌러 복사한 글(2026-11-12): «매물번호 2659636958» «방수/욕실수 2/1개» «주차가능여부 가능»
+    const nvNo = body.match(/매물번호\s*:?\s*(\d{8,})/);
+    if (nvNo && (!url || o.site === "네이버")) { o.site = "네이버"; o.qid = "naver-" + nvNo[1]; if (!url) o.link = "https://fin.land.naver.com/articles/" + nvNo[1]; }
+    const nvRoom = body.match(/방수\s*\/\s*욕실수\s*:?\s*([1-6])\s*\/\s*([1-4])/);
+    const nvPark = body.match(/주차가능여부\s*:?\s*(가능|불가능|불가|없음|있음)/);
+    if ((m = body.match(/(20\d\d|19\d\d)\.(\d{2})\s*\((\d+)년차\)/))) notes.push(m[1] + "년 " + Number(m[2]) + "월 준공(" + m[3] + "년차)");
+    if ((m = body.match(/향\s*(?:\(거실\s*기준\))?\s*([동서남북]{1,2}향)/))) notes.push(m[1]);
+    if ((m = body.match(/확인매물\s*(20\d\d)\.\s*(\d{1,2})\.\s*(\d{1,2})/))) notes.push("네이버 확인 " + m[1] + "-" + m[2].padStart(2, "0") + "-" + m[3].padStart(2, "0"));
+    if ((m = body.match(/위반건축물\s*여부\s*:?\s*([^\n]+)/)) && !/해당\s*없음|아니/.test(m[1])) notes.push("⚠ 위반건축물 " + m[1].trim());
     if (/반전세/.test(body)) o.deal = "반전세"; else if (/월세/.test(body)) o.deal = "월세"; else if (/전세/.test(body)) o.deal = "전세";
     // 월세 «1,000/50», «월세 1억/30»
     if ((m = body.match(new RegExp("(?:반전세|월세)\\s*:?\\s*" + MONEY + "\\s*\\/\\s*([0-9][0-9,.]*)")))) { o.deposit = manwon(m[1]); o.rent = manwon(m[2]); }
@@ -730,11 +739,13 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
     else if ((m = body.match(/전용(?:면적)?\s*:?\s*([0-9.]+)\s*평/))) o.area = Math.round(Number(m[1]) * 3.3058 * 10) / 10;
     else if ((m = body.match(new RegExp("([0-9.]+)\\s*" + U + "?\\s*\\/\\s*([0-9.]+)\\s*" + U)))) o.area = Number(m[2]);
     else if ((m = body.match(new RegExp("([0-9]+(?:\\.[0-9]+)?)\\s*" + U)))) { o.area = Number(m[1]); notes.push("면적이 공급인지 전용인지 확인"); }
-    if ((m = body.match(/방\s*(?:수|개수)?\s*:?\s*([1-6])\s*개?/))) o.rooms = Number(m[1]);
+    if (nvRoom) { o.rooms = Number(nvRoom[1]); notes.push("욕실 " + nvRoom[2]); }
+    else if ((m = body.match(/방\s*(?:수|개수)?\s*:?\s*([1-6])\s*개?/))) o.rooms = Number(m[1]);
     else if (/쓰리룸|방\s*3/.test(body)) o.rooms = 3; else if (/투룸|방\s*2/.test(body)) o.rooms = 2; else if (/원룸/.test(body)) o.rooms = 1;
-    if ((m = body.match(/욕실\s*(?:수)?\s*:?\s*([1-4])/))) notes.push("욕실 " + m[1]);
+    if (!nvRoom && (m = body.match(/욕실\s*(?:수)?\s*:?\s*([1-4])/))) notes.push("욕실 " + m[1]);
     if ((m = body.match(/(\d+|저|중|고)\s*\/\s*(\d+)\s*층/))) notes.push(m[1] + "/" + m[2] + "층");
-    if ((m = body.match(/주차\s*:?\s*(가능|불가능|불가|있음|없음|O|X|o|x|\d+\s*대)/))) o.parking = /불가|없음|X|x/.test(m[1]) ? "불가" : "가능";
+    if (nvPark) o.parking = /불가|없음/.test(nvPark[1]) ? "불가" : "가능";
+    else if ((m = body.match(/주차\s*:?\s*(가능|불가능|불가|있음|없음|O|X|o|x|\d+\s*대)/))) o.parking = /불가|없음|X|x/.test(m[1]) ? "불가" : "가능";
     else if (/주차\s*(가능|됨)|세대당\s*[0-9.]+\s*대/.test(body)) o.parking = "가능";
     if ((m = body.match(/입주\s*(?:가능)?\s*(?:일)?\s*:?\s*(20\d\d)[.\-\/년]\s*(\d{1,2})[.\-\/월]\s*(\d{1,2})/))) o.moveIn = m[1] + "-" + m[2].padStart(2, "0") + "-" + m[3].padStart(2, "0");
     else if ((m = body.match(/입주\s*(?:가능)?\s*(?:일)?\s*:?\s*(즉시|협의)/))) notes.push("입주 " + m[1]);
@@ -743,8 +754,10 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
     const dong = gu ? null : body.match(/(?:^|[\s\]),])([가-힣]{1,5}동)(?=[\s,.]|$)/);
     if (stn) o.station = stn[1]; else if (gu) o.station = gu[1] + " " + gu[2]; else if (dong) o.station = dong[1];
     if (/난곡/.test(t)) o.nangok = true;
-    const where = gu ? gu[2] : stn ? stn[1] : "";
-    const typ = (body.match(/(아파트|오피스텔|빌라|다세대|연립|도시형생활주택|단독|다가구)/) || [])[1] || "";
+    const where = gu ? gu[2] : stn ? stn[1] : dong ? dong[1] : "";
+    const TYP = /(아파트|오피스텔|빌라|다세대|연립|도시형생활주택|다가구|단독)/;
+    const line1 = (body.split(/\n/).find((x) => x.trim()) || "");
+    const typ = (line1.match(TYP) || body.match(TYP) || [])[1] || "";
     const first = t.split(/\n/).map((x) => x.trim().replace(/^\[[^\]]{0,12}\]\s*/, "")).find((x) => x && !/^https?:/.test(x) && !/^\[?네이버|공유/.test(x));
     let nm = [where, typ].filter(Boolean).join(" ") || (first ? first.slice(0, 24) : "");
     if (o.deal && nm.indexOf(o.deal) < 0) nm = (nm + " " + o.deal).trim();
@@ -774,7 +787,7 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
     S.quickId = p.qid || null;
     const dup = p.qid && S.items.find((x) => x.id === p.qid) || (p.link && S.items.find((x) => x.link && x.link === p.link));
     let msg = got.length ? "채운 칸: " + got.join(", ") + "." : "읽을 수 있는 값이 없었어요.";
-    if (p.site === "네이버") msg += " 네이버 링크는 클로드도 열 수 없어서, 빈 칸은 직접 적거나 공유 글을 함께 붙여넣어 주세요.";
+    if (p.site === "네이버" && got.length < 4) msg += " 네이버는 링크만으로는 못 읽어요. 매물 화면을 «기본 정보»부터 «매물번호»까지 길게 눌러 복사해 붙여넣으면 칸이 채워져요.";
     else if (p.link) msg += " 빈 칸은 저장해 두면 매일 아침 클로드가 링크를 열어 채워요.";
     if (p.sale) msg += " ⚠ 매매 글 같아요(거래 칸을 확인해 주세요).";
     if (p.nangok) msg += " ⚠ 난곡 쪽은 빼기로 했던 동네예요.";
