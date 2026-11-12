@@ -5,11 +5,12 @@
  * 지우기는 deleted=TRUE 표시만 한다(줄은 남는다). 정기 검색은 deleted·탈락 집을 다시 넣지 않는다.
  * 정기 검색(Claude)은 이 웹 앱이 아니라 구글 시트를 직접 읽고 써서 비밀번호가 필요 없다.
  */
-const VERSION = 3;
+const VERSION = 4;
 // 새 칸은 맨 뒤에만 더한다(이미 있는 줄의 칸 위치가 밀리지 않게)
 const COLS = ['id', 'name', 'kind', 'deal', 'station', 'walkMin', 'address', 'area', 'rooms', 'baths', 'deposit', 'rent', 'mgmt',
   'parking', 'parkingFee', 'moveIn', 'deadline', 'status', 'link', 'memo', 'images', 'source', 'createdAt', 'updatedAt', 'deleted',
-  'alias', 'agent', 'rank', 'priority']; // 2026-11-09 별칭·중개사 이름·내 순위(숫자)·우선순위(최우선/높음/보통/낮음)
+  'alias', 'agent', 'rank', 'priority', // 2026-11-09 별칭·중개사 이름·내 순위(숫자)·우선순위(최우선/높음/보통/낮음)
+  'fill']; // 2026-11-12 «대기»면 정기 검색(Claude)이 링크를 열어 빈 칸만 채우고 «완료»로 바꾼다
 const NUM = ['walkMin', 'area', 'rooms', 'baths', 'deposit', 'rent', 'mgmt', 'parkingFee', 'rank'];
 
 function doGet() { return out_({ ok: true, app: 'house-hunt', hint: 'POST로 요청하세요' }); }

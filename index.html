@@ -127,6 +127,12 @@ tbody tr.dead { opacity: .55; }
 .b-공고 { background: var(--accent-soft); color: var(--accent); }
 .b-매물 { background: var(--unk-soft); color: var(--sub); }
 .b-claude { background: var(--warn-soft); color: var(--warn); }
+.b-fill { background: var(--accent-soft); color: var(--accent); }
+.quick { border: 1.5px dashed var(--accent); border-radius: 10px; padding: 10px; background: var(--accent-soft); }
+.quick textarea { min-height: 64px; }
+.quick .actions { margin-top: 6px; }
+.field.got input, .field.got select { animation: got 1.2s ease-out; }
+@keyframes got { 0% { background: var(--ok-soft); box-shadow: 0 0 0 2px var(--ok); } 100% { background: var(--bg); box-shadow: none; } }
 .st { border-radius: 999px; padding: 1px 8px; font-size: .78rem; font-weight: 600; white-space: nowrap; }
 .st-후보 { background: var(--unk-soft); color: var(--sub); }
 .st-관심 { background: var(--accent-soft); color: var(--accent); }
@@ -315,6 +321,11 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
       <button class="btn ghost" type="button" data-close>닫기</button>
     </div>
     <form id="itemForm" class="form" novalidate>
+      <div class="field full quick" id="quickBox">
+        <label for="f_quick">빠른 입력: 링크나 공유 글 붙여넣기</label>
+        <textarea id="f_quick" placeholder="네이버 부동산·당근·다방·직방에서 «공유»로 복사한 글이나 링크를 그대로 붙여넣어요"></textarea>
+        <div class="actions"><button class="btn primary" type="button" id="btnQuick">칸 채우기</button><span class="hint" id="quickMsg">읽은 값은 빈 칸에만 들어가요. 못 채운 칸은 매일 아침 클로드가 링크를 열어 채워요(네이버는 사이트가 막혀 있어 공유 글에 있는 값만).</span></div>
+      </div>
       <div class="field full"><label for="f_name">이름 (단지·건물명이나 알아볼 말)</label><input id="f_name" required placeholder="예: 신대방역 ○○빌라 3층"></div>
       <div class="field full"><label for="f_alias">별칭 (우리끼리 부르는 이름)</label><input id="f_alias" placeholder="예: 햇살집, 보라매 신축"></div>
       <div class="field"><label for="f_kind">종류</label><select id="f_kind"><option>매물</option><option>공고</option></select></div>
@@ -496,6 +507,7 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
       el("div", { class: "small muted" },
         el("span", { class: "badge b-" + (it.kind || "매물"), text: (it.kind || "매물") + " · " + (it.deal || "–") }),
         it.source === "클로드" ? el("span", { class: "badge b-claude", text: "클로드 검색" }) : null,
+        it.fill === "대기" ? el("span", { class: "badge b-fill", text: "클로드 정리 대기" }) : null,
         cmtCount(it.id) ? el("span", { class: "badge", text: "의견 " + cmtCount(it.id) }) : null,
         (it.station || "") + (n(it.walkMin) != null ? " 도보 " + n(it.walkMin) + "분" : ""),
         it.agent ? el("span", { class: "muted", text: " · " + it.agent }) : null));
@@ -621,7 +633,7 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
     const link = safeUrl(it.link || "");
     const kv = el("div", { class: "kv" },
       ...(it.alias ? [el("div", { text: "정식 이름" }), el("div", { text: it.name || "–" })] : []),
-      el("div", { text: "종류" }), el("div", { text: (it.kind || "매물") + " · " + (it.deal || "–") + (it.source === "클로드" ? " · 클로드 검색" : "") }),
+      el("div", { text: "종류" }), el("div", { text: (it.kind || "매물") + " · " + (it.deal || "–") + (it.source === "클로드" ? " · 클로드 검색" : "") + (it.fill === "대기" ? " · 클로드 정리 대기(매일 아침)" : it.fill === "완료" ? " · 클로드가 빈 칸 채움" : it.fill === "못함" ? " · 클로드가 링크를 못 열었어요(메모 참고)" : "") }),
       el("div", { text: "위치" }), el("div", { text: (it.station || "–") + (n(it.walkMin) != null ? " · 도보 " + n(it.walkMin) + "분" : "") + (it.address ? " · " + it.address : "") }),
       el("div", { text: "전용·방" }), el("div", { class: "num", text: (d.area == null ? "–" : fmt(d.area, 2) + "㎡ (" + fmt(py(d.area), 1) + "평)") + " · 방 " + (d.rooms ?? "–") + (it.baths ? " · 욕실 " + it.baths : "") }),
       el("div", { text: "보증금" }), el("div", { class: "num", text: fmt(d.dep) + " (대출 필요 " + fmt(d.loan) + ")" }),
@@ -671,6 +683,107 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
     openSheet("detailSheet");
   }
 
+  /* ---------- 빠른 입력: 링크·공유 글에서 값 읽기 (2026-11-12) ---------- */
+  const QUICK_HINT = $("quickMsg").textContent;
+  // «2억 5,000» «2.5억» «25,000» → 만 원
+  function manwon(s) {
+    s = String(s || "").replace(/\s+/g, "");
+    const m = s.match(/^([0-9.]+)억([0-9,]*)(천)?(?:만)?원?$/);
+    if (m) return Math.round(parseFloat(m[1]) * 10000 + (m[2] ? (Number(m[2].replace(/,/g, "")) || 0) * (m[3] ? 1000 : 1) : 0));
+    const c = s.match(/^([0-9.]+)천(?:만)?원?$/);
+    if (c) return Math.round(parseFloat(c[1]) * 1000);
+    const k = s.replace(/[,만원]/g, "");
+    return /^[0-9.]+$/.test(k) ? Number(k) : null;
+  }
+  const MONEY = "([0-9.]+\\s*억(?:\\s*[0-9][0-9,]{0,5}\\s*천?(?![0-9.,]*\\s*(?:㎡|m²|m2|평|층|제곱|호선|호|룸|동|개|대|년|천)))?|[0-9.]+\\s*천|[0-9][0-9,]*(?:\\.[0-9]+)?)\\s*(?:만\\s*원?|만)?";
+  function siteOf(url) {
+    let m;
+    if ((m = url.match(/land\.naver\.com\/[^\s]*?(?:articleNo=|articles\/|article\/info\/|article\/)(\d{6,})/))) return { site: "네이버", id: "naver-" + m[1] };
+    if (/naver\.(me|com)/.test(url)) return { site: "네이버", id: null };
+    if ((m = url.match(/daangn\.com\/[^\s?#]*?articles\/([A-Za-z0-9]+)/))) return { site: "당근", id: "daangn-" + m[1].toLowerCase() };
+    if (/daangn\.com/.test(url)) return { site: "당근", id: null };
+    if ((m = url.match(/dabangapp\.com\/[^\s]*?(?:room\/|detail_id=|[?&]id=)([0-9a-fA-F]{6,})/))) return { site: "다방", id: "dabang-" + m[1].toLowerCase() };
+    if (/dabang/.test(url)) return { site: "다방", id: null };
+    if ((m = url.match(/zigbang\.com\/[^\s]*?items\/(\d+)/))) return { site: "직방", id: "zigbang-" + m[1] };
+    if (/zigbang/.test(url)) return { site: "직방", id: null };
+    return { site: "", id: null };
+  }
+  function parseListing(raw) {
+    const t = String(raw || "").replace(/\u00a0/g, " ");
+    const o = {}, notes = [];
+    const url = (t.match(/https?:\/\/[^\s<>"\u3000]+/) || [])[0];
+    if (url) { o.link = url.replace(/[)\].,]+$/, ""); const s = siteOf(o.link); o.site = s.site; o.qid = s.id; }
+    const body = url ? t.replace(url, " ") : t;
+    let m;
+    if (/반전세/.test(body)) o.deal = "반전세"; else if (/월세/.test(body)) o.deal = "월세"; else if (/전세/.test(body)) o.deal = "전세";
+    // 월세 «1,000/50», «월세 1억/30»
+    if ((m = body.match(new RegExp("(?:반전세|월세)\\s*:?\\s*" + MONEY + "\\s*\\/\\s*([0-9][0-9,.]*)")))) { o.deposit = manwon(m[1]); o.rent = manwon(m[2]); }
+    else if ((m = body.match(new RegExp("전세\\s*:?\\s*" + MONEY)))) { o.deposit = manwon(m[1]); o.rent = 0; }
+    if (o.deposit == null && (m = body.match(new RegExp("보증금\\s*:?\\s*" + MONEY)))) o.deposit = manwon(m[1]);
+    if (o.rent == null && (m = body.match(/월세\s*:?\s*([0-9][0-9,.]*)\s*(?:만\s*원?)?(?![0-9,.]*\s*\/)(?!\s*[0-9])/))) o.rent = manwon(m[1]);
+    if (/매매/.test(body) && !o.deal) o.sale = true;
+    if ((m = body.match(/관리비\s*:?\s*(?:월\s*)?([0-9][0-9,.]*)\s*(만\s*원?|만|원)?/))) { const v = Number(m[1].replace(/,/g, "")); if (isFinite(v)) o.mgmt = m[2] === "원" || v >= 1000 ? Math.round(v / 1000) / 10 : v; }
+    else if (/관리비\s*:?\s*없음/.test(body)) o.mgmt = 0;
+    // 면적: «전용 36.5㎡», «84/59㎡»(공급/전용), «전용 11평»
+    const U = "(?:㎡|m²|m2|제곱미터)";
+    if ((m = body.match(new RegExp("전용(?:면적)?\\s*:?\\s*([0-9.]+)\\s*" + U)))) o.area = Number(m[1]);
+    else if ((m = body.match(/전용(?:면적)?\s*:?\s*([0-9.]+)\s*평/))) o.area = Math.round(Number(m[1]) * 3.3058 * 10) / 10;
+    else if ((m = body.match(new RegExp("([0-9.]+)\\s*" + U + "?\\s*\\/\\s*([0-9.]+)\\s*" + U)))) o.area = Number(m[2]);
+    else if ((m = body.match(new RegExp("([0-9]+(?:\\.[0-9]+)?)\\s*" + U)))) { o.area = Number(m[1]); notes.push("면적이 공급인지 전용인지 확인"); }
+    if ((m = body.match(/방\s*(?:수|개수)?\s*:?\s*([1-6])\s*개?/))) o.rooms = Number(m[1]);
+    else if (/쓰리룸|방\s*3/.test(body)) o.rooms = 3; else if (/투룸|방\s*2/.test(body)) o.rooms = 2; else if (/원룸/.test(body)) o.rooms = 1;
+    if ((m = body.match(/욕실\s*(?:수)?\s*:?\s*([1-4])/))) notes.push("욕실 " + m[1]);
+    if ((m = body.match(/(\d+|저|중|고)\s*\/\s*(\d+)\s*층/))) notes.push(m[1] + "/" + m[2] + "층");
+    if ((m = body.match(/주차\s*:?\s*(가능|불가능|불가|있음|없음|O|X|o|x|\d+\s*대)/))) o.parking = /불가|없음|X|x/.test(m[1]) ? "불가" : "가능";
+    else if (/주차\s*(가능|됨)|세대당\s*[0-9.]+\s*대/.test(body)) o.parking = "가능";
+    if ((m = body.match(/입주\s*(?:가능)?\s*(?:일)?\s*:?\s*(20\d\d)[.\-\/년]\s*(\d{1,2})[.\-\/월]\s*(\d{1,2})/))) o.moveIn = m[1] + "-" + m[2].padStart(2, "0") + "-" + m[3].padStart(2, "0");
+    else if ((m = body.match(/입주\s*(?:가능)?\s*(?:일)?\s*:?\s*(즉시|협의)/))) notes.push("입주 " + m[1]);
+    const gu = body.match(/([가-힣]{1,4}구)\s+([가-힣0-9]{1,6}동)(?![가-힣])/);
+    const stn = body.match(/([가-힣]{2,8}역)(?![가-힣])/);
+    const dong = gu ? null : body.match(/(?:^|[\s\]),])([가-힣]{1,5}동)(?=[\s,.]|$)/);
+    if (stn) o.station = stn[1]; else if (gu) o.station = gu[1] + " " + gu[2]; else if (dong) o.station = dong[1];
+    if (/난곡/.test(t)) o.nangok = true;
+    const where = gu ? gu[2] : stn ? stn[1] : "";
+    const typ = (body.match(/(아파트|오피스텔|빌라|다세대|연립|도시형생활주택|단독|다가구)/) || [])[1] || "";
+    const first = t.split(/\n/).map((x) => x.trim().replace(/^\[[^\]]{0,12}\]\s*/, "")).find((x) => x && !/^https?:/.test(x) && !/^\[?네이버|공유/.test(x));
+    let nm = [where, typ].filter(Boolean).join(" ") || (first ? first.slice(0, 24) : "");
+    if (o.deal && nm.indexOf(o.deal) < 0) nm = (nm + " " + o.deal).trim();
+    o.name = nm || (o.site ? o.site + " 매물" : "");
+    if (o.site) o.name += o.site && o.name.indexOf(o.site) < 0 ? " (" + o.site + ")" : "";
+    o.notes = notes;
+    return o;
+  }
+  function quickFill() {
+    const p = parseListing($("f_quick").value);
+    // 앞서 붙여넣은 다른 매물 값이 남지 않게: 지난번 자동으로 채운 값이 그대로면 비운다
+    for (const k in (S.autoVals || {})) { const f = $("f_" + k); if (f.value === S.autoVals[k]) { if (f.tagName === "SELECT") f.selectedIndex = 0; else f.value = ""; } }
+    S.autoVals = {};
+    const set = { name: p.name, deal: p.deal, station: p.station, area: p.area, rooms: p.rooms, deposit: p.deposit, rent: p.rent, mgmt: p.mgmt, parking: p.parking, movein: p.moveIn, link: p.link };
+    const got = [];
+    const LABEL = { name: "이름", deal: "거래", station: "동네", area: "면적", rooms: "방", deposit: "보증금", rent: "월세", mgmt: "관리비", parking: "주차", movein: "입주일", link: "링크" };
+    for (const k in set) {
+      const v = set[k]; if (v == null || v === "") continue;
+      const f = $("f_" + k);
+      const isDefault = f.tagName === "SELECT" && f.selectedIndex === 0;
+      if (f.value.trim() && !isDefault) continue; // 이미 적은 값은 그대로
+      if (f.tagName === "SELECT" && ![...f.options].some((o) => o.value === String(v))) continue;
+      f.value = String(v); got.push(LABEL[k]); S.autoVals[k] = f.value;
+      const box = f.closest(".field"); box.classList.remove("got"); void box.offsetWidth; box.classList.add("got");
+    }
+    if (p.notes.length) { const memo = $("f_memo"); const add = p.notes.filter((x) => memo.value.indexOf(x) < 0).join(" · "); if (add) memo.value = (memo.value ? memo.value + "\n" : "") + add; }
+    S.quickId = p.qid || null;
+    const dup = p.qid && S.items.find((x) => x.id === p.qid) || (p.link && S.items.find((x) => x.link && x.link === p.link));
+    let msg = got.length ? "채운 칸: " + got.join(", ") + "." : "읽을 수 있는 값이 없었어요.";
+    if (p.site === "네이버") msg += " 네이버 링크는 클로드도 열 수 없어서, 빈 칸은 직접 적거나 공유 글을 함께 붙여넣어 주세요.";
+    else if (p.link) msg += " 빈 칸은 저장해 두면 매일 아침 클로드가 링크를 열어 채워요.";
+    if (p.sale) msg += " ⚠ 매매 글 같아요(거래 칸을 확인해 주세요).";
+    if (p.nangok) msg += " ⚠ 난곡 쪽은 빼기로 했던 동네예요.";
+    if (dup && !S.editing) msg += " ⚠ 이미 올린 집 같아요: " + dispName(dup);
+    $("quickMsg").textContent = msg;
+  }
+  $("btnQuick").addEventListener("click", quickFill);
+  $("f_quick").addEventListener("paste", () => setTimeout(quickFill, 0));
+
   /* ---------- 입력 ---------- */
   const F = ["name", "alias", "kind", "deal", "station", "walk", "area", "rooms", "deposit", "rent", "mgmt", "parking", "pfee", "movein", "deadline", "status", "link", "memo", "priority", "rank", "agent"];
   const MAP = { walk: "walkMin", pfee: "parkingFee", movein: "moveIn" };
@@ -679,6 +792,7 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
     S.editing = id || null; S.pending = []; S.removed = [];
     const it = id ? S.items.find((x) => x.id === id) : null;
     $("fTitle").textContent = it ? "고치기: " + (it.name || "") : "매물 올리기";
+    $("f_quick").value = ""; $("quickMsg").textContent = QUICK_HINT; S.quickId = null;
     for (const k of F) { const f = $("f_" + k); const key = MAP[k] || k; const v = it ? it[key] : null; if (f.tagName === "SELECT") f.value = v || f.options[0].value; else f.value = v == null ? "" : v; }
     S.keepPhotos = it && Array.isArray(it.photos) ? it.photos.slice() : [];
     $("photoField").hidden = !S.assets; $("noUploadHint").hidden = !!S.assets;
@@ -721,11 +835,16 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
       body.photos = photos;
       body.updatedAt = new Date().toISOString();
       if (!old) { body.createdAt = body.updatedAt; body.source = "효니"; }
-      const ref = S.editing ? S.db.doc("listings/" + S.editing) : S.db.collection("listings").doc();
+      // 링크가 있는데 면적·방·보증금 중 빈 칸이 있으면 클로드 정리 대기(매일 아침 정기 검색이 빈 칸만 채움)
+      // 네이버는 클로드가 열 수 없어 대기로 두지 않는다. 공고는 면적이 범위라 대상에서 뺀다
+      const missing = body.link && body.kind !== "공고" && siteOf(body.link).site !== "네이버" && (body.area == null || body.rooms == null || body.deposit == null || (body.deal !== "전세" && body.rent == null));
+      body.fill = missing ? "대기" : (old && old.fill === "완료" ? "완료" : "");
+      const qid = !old && S.quickId && !S.items.some((x) => x.id === S.quickId) ? S.quickId : null;
+      const ref = S.editing ? S.db.doc("listings/" + S.editing) : qid ? S.db.doc("listings/" + qid) : S.db.collection("listings").doc();
       await ref.set(body);
       if (S.assets && S.removed) for (const pid of S.removed) { try { await S.assets.delete(pid); } catch (err) { /* 이미 없으면 넘어감 */ } }
       S.removed = []; S.pending = [];
-      closeSheets(); toast(old ? "고쳤어요" : "올렸어요");
+      closeSheets(); toast((old ? "고쳤어요" : "올렸어요") + (body.fill === "대기" ? " · 빈 칸은 내일 아침 클로드가 채워요" : ""));
     } catch (err) {
       const code = err && err.code;
       toast(code === "too_large" ? "파일이 너무 커요(20MB까지)" : code === "unsupported_type" ? "이 파일 형식은 올릴 수 없어요" : code === "quota_or_state" || code === "quota_exceeded" ? "저장 공간이 꽉 찼어요. 탈락한 집의 사진을 지워 주세요" : "저장하지 못했어요: " + (code || "오류"));
@@ -931,6 +1050,16 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
   function showGate(msg) { $("gateMsg").textContent = msg || "처음 한 번만 넣으면 이 기기에 기억해요."; $("gateSheet").hidden = false; setTimeout(() => $("gatePw").focus(), 30); }
   $("gateForm").addEventListener("submit", (e) => { e.preventDefault(); const v = $("gatePw").value; if (!v) return; memKey = v; setKey(v); $("gateSheet").hidden = true; start(); });
 
+  // 폰에서 «공유 → 집 찾기»로 열면 주소에 title·text·url이 붙어 온다(안드로이드, 홈 화면에 추가한 앱)
+  let SHARED = null;
+  try {
+    const su = new URL(location.href), sp = su.searchParams;
+    if (sp.has("text") || sp.has("url")) {
+      SHARED = { text: [sp.get("title"), sp.get("text"), sp.get("url")].filter(Boolean).join("\n") };
+      ["title", "text", "url"].forEach((k) => sp.delete(k));
+      history.replaceState(null, "", su.pathname + su.search + su.hash);
+    }
+  } catch (e) { /* 주소를 못 읽으면 공유 글 없이 연다 */ }
   let started = false;
   async function start() {
     const note = $("statusNote");
@@ -942,6 +1071,7 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
         for (const id of [...S.sel]) if (!S.items.some((x) => x.id === id)) S.sel.delete(id);
         S.loaded = true; note.hidden = true; note.classList.remove("warn");
         render();
+        if (SHARED && !SHARED.done) { SHARED.done = true; openForm(null); $("f_quick").value = SHARED.text; quickFill(); }
       });
       db.doc("settings/conditions").onSnapshot((snap) => { if (snap.exists) { S.cond = Object.assign({}, DEFAULT_COND, snap.data()); render(); } });
       setInterval(() => { if (!document.hidden && getKey()) refresh().catch(() => {}); }, 30000);
