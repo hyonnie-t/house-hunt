@@ -183,7 +183,8 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
 .gate-brand img { border-radius: 11px; flex: none; }
 .gate-brand b { font-size: 1.05rem; }
 /* 상세 창 다시 정리(2026-11-12): 위에 붙는 제목 줄, 정리 칸, 의견 */
-.panel-head { position: sticky; top: calc(-1 * max(16px, env(safe-area-inset-top, 0px))); margin-top: calc(-1 * max(16px, env(safe-area-inset-top, 0px))); padding-top: max(12px, env(safe-area-inset-top, 0px)); padding-bottom: 10px; background: var(--surface); border-bottom: 1px solid var(--line); z-index: 3; }
+.panel:has(> .panel-head) { padding-top: 0; } /* 제목 줄이 있는 창은 위 여백을 제목 줄이 갖는다(음수 값 없이 고정, 2026-11-12) */
+.panel-head { position: sticky; top: 0; padding-top: max(14px, env(safe-area-inset-top, 0px)); padding-bottom: 10px; background: var(--surface); border-bottom: 1px solid var(--line); z-index: 3; }
 .panel-head h2 { line-height: 1.35; }
 .kv .num { font-family: var(--f-body); font-variant-numeric: tabular-nums; }
 .org { display: grid; grid-template-columns: 1fr 1fr 5.5em; gap: 8px; margin: 12px 0 4px; }
