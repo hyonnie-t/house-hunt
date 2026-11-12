@@ -539,15 +539,29 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
   }
 
   /* ---------- 새 소식: 이 기기에서 지난번 연 뒤로 바뀐 것 (2026-11-12) ---------- */
-  // 앱을 열 때 «지난번 본 때»를 읽어 두고, 목록을 처음 불러오면 지금으로 바꿔 둔다(다음에 열 때 기준).
-  // 이번에 열려 있는 동안은 처음 읽은 기준을 그대로 써서 30초마다 새로 읽어도 표시가 사라지지 않는다.
-  const SEEN_KEY = "hh_seen";
-  const NEWS = { since: null, saved: false, only: false, touched: new Set() };
-  try { NEWS.since = localStorage.getItem(SEEN_KEY); } catch (e) { /* 저장소가 막히면 처음 연 것으로 */ }
-  if (!NEWS.since) NEWS.since = new Date(Date.now() - 3 * 86400000).toISOString(); // 처음이면 최근 3일
+  // «한 번 보기»는 처음 연 때부터 2시간 안에 다시 연 것까지 묶는다. 그 안에서 새로고침·다시 열기를 해도 기준(hh_seen)은 그대로다.
+  // 2시간이 지나 다시 열면, 지난번 보기를 시작한 때(hh_visit)가 새 기준이 된다. «다 봤어요»는 기준을 바로 지금으로 옮긴다.
+  const SEEN_KEY = "hh_seen", VISIT_KEY = "hh_visit", TOUCH_KEY = "hh_touched", VISIT_MS = 2 * 3600000;
+  const NEWS = { since: null, saved: false, only: false, touched: {} };
+  const lsGet = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+  const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* 이번만 */ } };
+  (function () {
+    NEWS.since = lsGet(SEEN_KEY);
+    const visit = lsGet(VISIT_KEY);
+    if (visit && Date.now() - (Date.parse(visit) || 0) > VISIT_MS) { NEWS.since = visit; lsSet(SEEN_KEY, visit); }
+    if (!NEWS.since) NEWS.since = new Date(Date.now() - 3 * 86400000).toISOString(); // 처음이면 최근 3일
+    try { NEWS.touched = JSON.parse(lsGet(TOUCH_KEY) || "{}") || {}; } catch (e) { NEWS.touched = {}; }
+  })();
   const sinceT = () => Date.parse(NEWS.since) || 0;
+  // 이 기기에서 내가 고친 집: 집 id → 고친 때. 새로고침해도 남게 저장하고, 7일 지난 것은 버린다
+  function touch(id) {
+    const now = Date.now(); NEWS.touched[id] = now;
+    for (const k in NEWS.touched) if (now - NEWS.touched[k] > 7 * 86400000) delete NEWS.touched[k];
+    lsSet(TOUCH_KEY, JSON.stringify(NEWS.touched));
+  }
   function newKind(it) {
-    if (NEWS.touched.has(it.id)) return ""; // 내가 이 기기에서 방금 고친 집은 빼기
+    const mine = NEWS.touched[it.id], up = Date.parse(it.updatedAt || 0) || 0;
+    if (mine && up <= mine + 120000) return ""; // 마지막 고침이 내 것이면 빼기(남이 그 뒤에 고치면 다시 보임)
     const t = sinceT();
     if ((Date.parse(it.createdAt || 0) || 0) > t) return "new";
     if ((Date.parse(it.updatedAt || 0) || 0) > t) return "upd";
@@ -555,7 +569,8 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
   }
   function newCmts(id) { const t = sinceT(); return CM.list.filter((c) => c.itemId === id && (Date.parse(c.at || 0) || 0) > t && (!CM.who || c.who !== CM.who)); }
   function lastCmt(id) { const l = CM.list.filter((c) => c.itemId === id); return l.length ? l.reduce((a, b) => ((Date.parse(b.at || 0) || 0) >= (Date.parse(a.at || 0) || 0) ? b : a)) : null; }
-  function saveSeen(now) { try { localStorage.setItem(SEEN_KEY, now || new Date().toISOString()); } catch (e) { /* 이번만 */ } }
+  // 목록을 처음 받으면: 새 «보기»의 시작이면 지금을 hh_visit로 남긴다(기준은 다음 보기 때 옮겨짐)
+  function markVisit() { const v = lsGet(VISIT_KEY); if (!v || Date.now() - (Date.parse(v) || 0) > VISIT_MS) lsSet(VISIT_KEY, new Date().toISOString()); }
   function renderNews() {
     const bar = $("newsBar");
     let nNew = 0, nUpd = 0, nCmt = 0;
@@ -568,7 +583,7 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
     const onlyBtn = el("button", { type: "button", class: "btn", "aria-pressed": String(NEWS.only), text: NEWS.only ? "전부 보기" : "새 것만 보기" });
     onlyBtn.addEventListener("click", () => { NEWS.only = !NEWS.only; render(); });
     const doneBtn = el("button", { type: "button", class: "btn ghost", text: "다 봤어요" });
-    doneBtn.addEventListener("click", () => { NEWS.since = new Date().toISOString(); saveSeen(NEWS.since); NEWS.only = false; render(); toast("새 소식 표시를 지웠어요"); });
+    doneBtn.addEventListener("click", () => { NEWS.since = new Date().toISOString(); lsSet(SEEN_KEY, NEWS.since); lsSet(VISIT_KEY, NEWS.since); NEWS.only = false; render(); toast("새 소식 표시를 지웠어요"); });
     bar.replaceChildren(el("span", { text: "지난번 본 뒤로" }), ...parts, el("span", { class: "grow" }), onlyBtn, doneBtn);
     bar.hidden = false;
   }
@@ -839,8 +854,9 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
     const TYP = /(아파트|오피스텔|빌라|다세대|연립|도시형생활주택|다가구|단독)/;
     const line1 = (body.split(/\n/).find((x) => x.trim()) || "");
     const typ = (line1.match(TYP) || body.match(TYP) || [])[1] || "";
-    const first = t.split(/\n/).map((x) => x.trim().replace(/^\[[^\]]{0,12}\]\s*/, "")).find((x) => x && !/^https?:/.test(x) && !/^\[?네이버|공유/.test(x));
-    let nm = [where, typ].filter(Boolean).join(" ") || (first ? first.slice(0, 24) : "");
+    const first = t.split(/\n/).map((x) => x.trim().replace(/^\[[^\]]{0,12}\]\s*/, "")).find((x) => x && !/^https?:/.test(x) && !/^\[?네이버|공유/.test(x) && !/^(기본 정보|알림|관심매물|보증금\/월세)/.test(x));
+    // 네이버 복사 글은 첫 줄이 «기본 정보»·숫자일 수 있어 첫 줄을 이름으로 쓰지 않는다
+    let nm = [where, typ].filter(Boolean).join(" ") || (first && !nvNo && !nvRoom ? first.slice(0, 24) : "");
     if (o.deal && nm.indexOf(o.deal) < 0) nm = (nm + " " + o.deal).trim();
     o.name = nm || (o.site ? o.site + " 매물" : "");
     if (o.site) o.name += o.site && o.name.indexOf(o.site) < 0 ? " (" + o.site + ")" : "";
@@ -998,11 +1014,11 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
     const parts = path.split("/"), col = parts[0], id = parts[1];
     return {
       async set(data) {
-        if (col === "listings") { NEWS.touched.add(id); await persist(Object.assign({ id: id }, data)); }
+        if (col === "listings") { touch(id); await persist(Object.assign({ id: id }, data)); }
         else if (col === "settings") { store.cond = data; fire(); await call("saveConditions", { cond: data }); }
         /* dismissed: 지운 집은 줄에 deleted 표시가 남아서 따로 적지 않는다 */
       },
-      async update(part) { NEWS.touched.add(id); await persist(Object.assign({}, store.items.get(id) || { id: id }, part)); },
+      async update(part) { touch(id); await persist(Object.assign({}, store.items.get(id) || { id: id }, part)); },
       async delete() { if (col === "listings") { store.items.delete(id); fire(); await call("remove", { id: id }); } },
       onSnapshot(cb) { if (col === "settings") { store.condCbs.push(cb); if (store.loaded) cb(snapCond()); } }
     };
@@ -1175,7 +1191,7 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
       document.addEventListener("visibilitychange", () => { if (!document.hidden && getKey()) refresh().catch(() => {}); });
     }
     if (!getKey() && !memKey) { note.textContent = "비밀번호를 넣으면 목록이 보여요."; showGate(""); return; }
-    try { await refresh(); note.hidden = true; if (!NEWS.saved) { NEWS.saved = true; saveSeen(); } }
+    try { await refresh(); note.hidden = true; if (!NEWS.saved) { NEWS.saved = true; markVisit(); } }
     catch (e) {
       note.hidden = false; note.classList.add("warn");
       if (e.code === "bad_key") { try { localStorage.removeItem(KEY_NAME); } catch (x) {} memKey = ""; note.textContent = "비밀번호가 맞지 않아요."; showGate("비밀번호가 맞지 않아요. 다시 넣어 주세요."); }
