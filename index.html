@@ -156,10 +156,47 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
 .card dt { color: var(--sub); }
 .card dd { margin: 0; }
 .card .top label { white-space: nowrap; display: inline-flex; gap: 4px; align-items: center; }
+/* 새 소식 줄·카드 요약 (2026-11-12) */
+.news { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; background: var(--accent-soft); color: var(--accent); border-radius: 10px; padding: 7px 10px; margin-bottom: 8px; font-size: .86rem; animation: rise .32s ease-out both; }
+.news[hidden] { display: none; }
+.news b { font-family: var(--f-num); }
+.news .btn { padding: 3px 9px; font-size: .8rem; }
+.b-new { background: var(--ok-soft); color: var(--ok); }
+.b-upd { background: var(--warn-soft); color: var(--warn); }
+.b-cmt { background: var(--accent-soft); color: var(--accent); }
+.card.is-new { border-color: var(--ok); }
+.kp { display: grid; grid-template-columns: 1.4fr 1fr .9fr; gap: 6px; margin: 8px 0 6px; }
+.kp div { background: var(--bg); border-radius: 8px; padding: 5px 8px; min-width: 0; }
+.kp span { display: block; font-size: .72rem; color: var(--sub); }
+.kp strong { display: block; font-family: var(--f-num); font-weight: 600; font-size: .92rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kp .big strong { font-size: 1.08rem; color: var(--accent); }
+.card .sub { font-size: .8rem; color: var(--sub); margin-bottom: 6px; }
+.card .last-cmt { margin-top: 7px; padding: 5px 8px; border-left: 3px solid var(--accent); background: var(--bg); border-radius: 0 6px 6px 0; font-size: .82rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card .last-cmt b { color: var(--accent); }
+.condtoggle { display: none; }
+.lg-only { display: inline; }
+#gateSheet { background: var(--bg); align-items: center; justify-content: center; }
+#gateSheet .panel { box-shadow: none; border: 1px solid var(--line); border-radius: 14px; animation: rise .3s ease-out both; }
 @media (max-width: 760px) {
   .tablebox { display: none; }
   .cards { display: grid; }
-  .bar { position: static; }
+  .bar { position: static; padding-block: 6px; margin-bottom: 10px; }
+  .head p.small { display: none; }
+  .head h1 { font-size: 1.3rem; margin: 0; }
+  .head { flex-wrap: nowrap; align-items: center; }
+  .head .chips { flex-wrap: nowrap; gap: 6px; }
+  .head .btn:not(.icon) { padding: 6px 10px; font-size: .86rem; }
+  .lg-only { display: none; }
+  .condtoggle { display: block; width: 100%; text-align: left; overflow: hidden; text-overflow: ellipsis; padding: 4px 10px; }
+  #condChips { display: none; margin-top: 6px; }
+  .bar.cond-open #condChips { display: flex; }
+  .filters { flex-wrap: nowrap; overflow-x: auto; margin-top: 6px; padding-bottom: 2px; scrollbar-width: none; }
+  .filters::-webkit-scrollbar { display: none; }
+  .filters > * { flex: none; }
+  .filters label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .filters .grow { display: none; }
+  #countLbl { display: block; margin-top: 4px; }
+  #gateSheet .panel { width: calc(100% - 32px); }
 }
 
 /* 순위·우선순위·별칭·중개사 */
@@ -217,13 +254,15 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
     </div>
     <div class="chips">
       <button class="btn icon" id="btnReload" type="button" aria-label="새로고침" title="새로고침"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 0 1 13.66-5.66L20 8.5"/><path d="M20 3.5v5h-5"/><path d="M20 12a8 8 0 0 1-13.66 5.66L4 15.5"/><path d="M4 20.5v-5h5"/></svg></button>
-      <button class="btn" id="btnAgents" type="button">중개사 정리</button>
-      <button class="btn" id="btnCond" type="button">조건 고치기</button>
-      <button class="btn primary" id="btnAdd" type="button">+ 매물 올리기</button>
+      <button class="btn" id="btnAgents" type="button">중개사<span class="lg-only"> 정리</span></button>
+      <button class="btn" id="btnCond" type="button">조건<span class="lg-only"> 고치기</span></button>
+      <button class="btn primary" id="btnAdd" type="button">+ <span class="lg-only">매물 </span>올리기</button>
     </div>
   </header>
 
-  <div class="bar">
+  <div class="bar" id="topBar">
+    <div class="news" id="newsBar" hidden role="status"></div>
+    <button type="button" class="chip condtoggle" id="btnCondShow" aria-expanded="false" aria-controls="condChips"></button>
     <div class="chips" id="condChips"></div>
     <div class="filters">
       <div class="seg" role="group" aria-label="상태">
@@ -399,7 +438,7 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
 </div>
 
 <div class="sheet" id="gateSheet" hidden>
-  <div class="panel" role="dialog" aria-modal="true" aria-labelledby="gTitle" style="align-self:flex-start;height:auto;max-width:420px;margin:auto">
+  <div class="panel" role="dialog" aria-modal="true" aria-labelledby="gTitle" style="height:auto;max-width:420px">
     <h2 id="gTitle">비밀번호를 넣어 주세요</h2>
     <form id="gateForm" class="form" novalidate>
       <div class="field full"><label for="gatePw">비밀번호</label><input id="gatePw" type="password" autocomplete="current-password"></div>
@@ -482,6 +521,7 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
     if (S.status === "live") list = list.filter((x) => x.it.status !== "탈락");
     else if (S.status === "탈락") list = list.filter((x) => x.it.status === "탈락");
     if (S.kind !== "all") list = list.filter((x) => (x.it.kind || "매물") === S.kind);
+    if (NEWS.only) list = list.filter((x) => newKind(x.it) || newCmts(x.it.id).length);
     if (S.pri === "none") list = list.filter((x) => !x.it.priority);
     else if (S.pri !== "all") list = list.filter((x) => x.it.priority === S.pri);
     const big = 1e12;
@@ -498,6 +538,41 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
     return list;
   }
 
+  /* ---------- 새 소식: 이 기기에서 지난번 연 뒤로 바뀐 것 (2026-11-12) ---------- */
+  // 앱을 열 때 «지난번 본 때»를 읽어 두고, 목록을 처음 불러오면 지금으로 바꿔 둔다(다음에 열 때 기준).
+  // 이번에 열려 있는 동안은 처음 읽은 기준을 그대로 써서 30초마다 새로 읽어도 표시가 사라지지 않는다.
+  const SEEN_KEY = "hh_seen";
+  const NEWS = { since: null, saved: false, only: false, touched: new Set() };
+  try { NEWS.since = localStorage.getItem(SEEN_KEY); } catch (e) { /* 저장소가 막히면 처음 연 것으로 */ }
+  if (!NEWS.since) NEWS.since = new Date(Date.now() - 3 * 86400000).toISOString(); // 처음이면 최근 3일
+  const sinceT = () => Date.parse(NEWS.since) || 0;
+  function newKind(it) {
+    if (NEWS.touched.has(it.id)) return ""; // 내가 이 기기에서 방금 고친 집은 빼기
+    const t = sinceT();
+    if ((Date.parse(it.createdAt || 0) || 0) > t) return "new";
+    if ((Date.parse(it.updatedAt || 0) || 0) > t) return "upd";
+    return "";
+  }
+  function newCmts(id) { const t = sinceT(); return CM.list.filter((c) => c.itemId === id && (Date.parse(c.at || 0) || 0) > t && (!CM.who || c.who !== CM.who)); }
+  function lastCmt(id) { const l = CM.list.filter((c) => c.itemId === id); return l.length ? l.reduce((a, b) => ((Date.parse(b.at || 0) || 0) >= (Date.parse(a.at || 0) || 0) ? b : a)) : null; }
+  function saveSeen(now) { try { localStorage.setItem(SEEN_KEY, now || new Date().toISOString()); } catch (e) { /* 이번만 */ } }
+  function renderNews() {
+    const bar = $("newsBar");
+    let nNew = 0, nUpd = 0, nCmt = 0;
+    S.items.forEach((it) => { const k = newKind(it); if (k === "new") nNew++; else if (k === "upd") nUpd++; nCmt += newCmts(it.id).length; });
+    if (!S.loaded || !(nNew + nUpd + nCmt)) { bar.hidden = true; if (NEWS.only) { NEWS.only = false; } return; }
+    const parts = [];
+    if (nNew) parts.push(el("span", null, "새 집 ", el("b", { text: String(nNew) })));
+    if (nUpd) parts.push(el("span", null, "고친 집 ", el("b", { text: String(nUpd) })));
+    if (nCmt) parts.push(el("span", null, "새 의견 ", el("b", { text: String(nCmt) })));
+    const onlyBtn = el("button", { type: "button", class: "btn", "aria-pressed": String(NEWS.only), text: NEWS.only ? "전부 보기" : "새 것만 보기" });
+    onlyBtn.addEventListener("click", () => { NEWS.only = !NEWS.only; render(); });
+    const doneBtn = el("button", { type: "button", class: "btn ghost", text: "다 봤어요" });
+    doneBtn.addEventListener("click", () => { NEWS.since = new Date().toISOString(); saveSeen(NEWS.since); NEWS.only = false; render(); toast("새 소식 표시를 지웠어요"); });
+    bar.replaceChildren(el("span", { text: "지난번 본 뒤로" }), ...parts, el("span", { class: "grow" }), onlyBtn, doneBtn);
+    bar.hidden = false;
+  }
+
   /* ---------- 그리기 ---------- */
   function flagEls(d) { return el("div", { class: "flags" }, ...d.flags.map((f) => el("span", { class: "f " + f[0], text: f[1] })), d.isNear ? el("span", { class: "f ok", text: "★ 가까운 동네" }) : null); }
   function nameEls(it, d) {
@@ -508,7 +583,8 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
         el("span", { class: "badge b-" + (it.kind || "매물"), text: (it.kind || "매물") + " · " + (it.deal || "–") }),
         it.source === "클로드" ? el("span", { class: "badge b-claude", text: "클로드 검색" }) : null,
         it.fill === "대기" ? el("span", { class: "badge b-fill", text: "클로드 정리 대기" }) : null,
-        cmtCount(it.id) ? el("span", { class: "badge", text: "의견 " + cmtCount(it.id) }) : null,
+        newKind(it) === "new" ? el("span", { class: "badge b-new", text: "새 집" }) : newKind(it) === "upd" ? el("span", { class: "badge b-upd", text: "고침" }) : null,
+        newCmts(it.id).length ? el("span", { class: "badge b-cmt", text: "새 의견 " + newCmts(it.id).length }) : cmtCount(it.id) ? el("span", { class: "badge", text: "의견 " + cmtCount(it.id) }) : null,
         (it.station || "") + (n(it.walkMin) != null ? " 도보 " + n(it.walkMin) + "분" : ""),
         it.agent ? el("span", { class: "muted", text: " · " + it.agent }) : null));
   }
@@ -531,6 +607,10 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
       el("span", { class: "chip" }, "금리 ", el("b", { class: "num", text: fmt(c.rate, 2) + "%" })),
       el("span", { class: "chip" }, "만기 ", el("b", { class: "num", text: c.moveBy })),
       el("span", { class: "chip" }, "★ ", c.near));
+    // 폰: 조건은 한 줄 요약으로 접어 두고 눌러서 펼친다
+    const open = $("topBar").classList.contains("cond-open");
+    $("btnCondShow").textContent = (open ? "▴ " : "▾ ") + "조건 · " + fmt(c.minArea) + "㎡↑ · 방 " + fmt(c.minRooms) + "↑ · 보증금 " + fmt(c.maxDeposit) + "↓ · 월 " + fmt(c.monthlyTarget);
+    renderNews();
     const list = visibleItems();
     fillAgentList();
     $("countLbl").textContent = list.length + "곳 표시 · 전체 " + S.items.length + "곳";
@@ -560,16 +640,17 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
       const cb2 = cb.cloneNode(); cb2.checked = cb.checked;
       cb2.addEventListener("click", (e) => e.stopPropagation());
       cb2.addEventListener("change", () => { if (cb2.checked) S.sel.add(it.id); else S.sel.delete(it.id); render(); });
-      const card = el("article", { class: "card", style: "animation-delay:" + Math.min(i, 12) * 0.04 + "s" },
+      // 폰 카드(2026-11-12): 숫자 세 칸 + 한 줄 보조 + 표시 + 최근 의견 한 줄로 짧게
+      const dl = dateLine(it), lc = lastCmt(it.id);
+      const card = el("article", { class: "card" + (newKind(it) === "new" ? " is-new" : ""), style: "animation-delay:" + Math.min(i, 12) * 0.04 + "s" },
         el("div", { class: "top" }, nameEls(it, d), el("label", { class: "small muted" }, cb2, " 비교")),
-        el("dl", null,
-          el("dt", { text: "전용·방" }), el("dd", { class: "num", text: (d.area == null ? "–" : fmt(d.area, 1) + "㎡ (" + fmt(py(d.area), 1) + "평)") + " · 방 " + (d.rooms == null ? "–" : d.rooms) }),
-          el("dt", { text: "보증금" }), el("dd", { class: "num", text: fmt(d.dep) }),
-          el("dt", { text: "월세+관리비" }), el("dd", { class: "num", text: moneyMonthly(d) }),
-          el("dt", { text: "월 부담" }), el("dd", { class: "num" }, el("b", { text: d.monthly == null ? "–" : fmt(d.monthly, 0) })),
-          el("dt", { text: "날짜" }), el("dd", { text: dateLine(it) })),
-        flagEls(d),
-        el("div", { class: "small", style: "margin-top:6px" }, el("span", { class: "st st-" + (it.status || "후보"), text: it.status || "후보" })));
+        el("div", { class: "kp" },
+          el("div", null, el("span", { text: "전용·방" }), el("strong", { text: (d.area == null ? "–" : fmt(d.area, 1) + "㎡") + "·방" + (d.rooms == null ? "–" : d.rooms) })),
+          el("div", null, el("span", { text: "보증금" }), el("strong", { text: fmt(d.dep) })),
+          el("div", { class: "big", title: d.monthly == null ? "" : "이자 " + fmt(d.interest, 1) + " 포함" }, el("span", { text: "월 부담" }), el("strong", { text: d.monthly == null ? "–" : fmt(d.monthly, 0) }))),
+        el("div", { class: "sub" }, "월세+관리비 " + moneyMonthly(d) + (d.area == null ? "" : " · " + fmt(py(d.area), 1) + "평") + (dl !== "–" ? " · " + dl : "")),
+        el("div", { class: "flags" }, el("span", { class: "st st-" + (it.status || "후보"), text: it.status || "후보" }), ...flagEls(d).childNodes),
+        lc ? el("div", { class: "last-cmt" }, el("b", { text: (lc.who || "?") + " " }), lc.text || "") : null);
       card.addEventListener("click", () => openDetail(it.id));
       cards.append(card);
     });
@@ -788,7 +869,7 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
     const dup = p.qid && S.items.find((x) => x.id === p.qid) || (p.link && S.items.find((x) => x.link && x.link === p.link));
     let msg = got.length ? "채운 칸: " + got.join(", ") + "." : "읽을 수 있는 값이 없었어요.";
     if (p.site === "네이버" && got.length < 4) msg += " 네이버는 링크만으로는 못 읽어요. 매물 화면을 «기본 정보»부터 «매물번호»까지 길게 눌러 복사해 붙여넣으면 칸이 채워져요.";
-    else if (p.link) msg += " 빈 칸은 저장해 두면 매일 아침 클로드가 링크를 열어 채워요.";
+    else if (p.link && p.site !== "네이버") msg += " 빈 칸은 저장해 두면 매일 아침 클로드가 링크를 열어 채워요.";
     if (p.sale) msg += " ⚠ 매매 글 같아요(거래 칸을 확인해 주세요).";
     if (p.nangok) msg += " ⚠ 난곡 쪽은 빼기로 했던 동네예요.";
     if (dup && !S.editing) msg += " ⚠ 이미 올린 집 같아요: " + dispName(dup);
@@ -879,6 +960,7 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
   document.querySelectorAll("[data-status]").forEach((b) => b.addEventListener("click", () => { S.status = b.dataset.status; document.querySelectorAll("[data-status]").forEach((x) => x.setAttribute("aria-pressed", String(x === b))); render(); }));
   document.querySelectorAll("[data-kind]").forEach((b) => b.addEventListener("click", () => { S.kind = b.dataset.kind; document.querySelectorAll("[data-kind]").forEach((x) => x.setAttribute("aria-pressed", String(x === b))); render(); }));
   $("priSel").addEventListener("change", (e) => { S.pri = e.target.value; render(); });
+  $("btnCondShow").addEventListener("click", () => { const open = $("topBar").classList.toggle("cond-open"); $("btnCondShow").setAttribute("aria-expanded", String(open)); render(); });
   $("sortSel").addEventListener("change", (e) => { S.sort = e.target.value; try { localStorage.setItem("hb_sort", S.sort); } catch (err) { /* 저장 안 돼도 됨 */ } render(); });
   try { const s = localStorage.getItem("hb_sort"); if (s) { S.sort = s; $("sortSel").value = s; } } catch (err) { /* 무시 */ }
   $("btnAdd").addEventListener("click", () => openForm(null));
@@ -916,11 +998,11 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
     const parts = path.split("/"), col = parts[0], id = parts[1];
     return {
       async set(data) {
-        if (col === "listings") await persist(Object.assign({ id: id }, data));
+        if (col === "listings") { NEWS.touched.add(id); await persist(Object.assign({ id: id }, data)); }
         else if (col === "settings") { store.cond = data; fire(); await call("saveConditions", { cond: data }); }
         /* dismissed: 지운 집은 줄에 deleted 표시가 남아서 따로 적지 않는다 */
       },
-      async update(part) { await persist(Object.assign({}, store.items.get(id) || { id: id }, part)); },
+      async update(part) { NEWS.touched.add(id); await persist(Object.assign({}, store.items.get(id) || { id: id }, part)); },
       async delete() { if (col === "listings") { store.items.delete(id); fire(); await call("remove", { id: id }); } },
       onSnapshot(cb) { if (col === "settings") { store.condCbs.push(cb); if (store.loaded) cb(snapCond()); } }
     };
@@ -1093,7 +1175,7 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
       document.addEventListener("visibilitychange", () => { if (!document.hidden && getKey()) refresh().catch(() => {}); });
     }
     if (!getKey() && !memKey) { note.textContent = "비밀번호를 넣으면 목록이 보여요."; showGate(""); return; }
-    try { await refresh(); note.hidden = true; }
+    try { await refresh(); note.hidden = true; if (!NEWS.saved) { NEWS.saved = true; saveSeen(); } }
     catch (e) {
       note.hidden = false; note.classList.add("warn");
       if (e.code === "bad_key") { try { localStorage.removeItem(KEY_NAME); } catch (x) {} memKey = ""; note.textContent = "비밀번호가 맞지 않아요."; showGate("비밀번호가 맞지 않아요. 다시 넣어 주세요."); }
