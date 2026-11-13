@@ -287,6 +287,34 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
 .memo-cell { max-width: 220px; color: var(--sub); font-size: .82rem; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 /* 태블릿 세로(≤1024)도 표 대신 카드, 넓으면 두 줄로(2026-11-12) */
+/* 위치·지도 (2026-11-13) */
+.card .meta.dist { display: flex; align-items: center; gap: var(--space-1); color: var(--accent); }
+.card .meta.dist.unk { color: var(--sub); }
+.pin-ic { width: 12px; height: 12px; flex: none; fill: none; stroke: currentColor; stroke-width: 2.2; }
+.dist { color: var(--accent); }
+.maplinks { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-3); align-items: baseline; }
+.mapwrap { margin-top: var(--space-2); animation: rise .32s cubic-bezier(.2,.8,.3,1.2) both; }
+.map-legend { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); font-size: .8rem; color: var(--sub); margin-bottom: var(--space-2); }
+.map-legend i { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: var(--space-1); vertical-align: -1px; border: 2px solid; }
+.map-legend .lg-live { background: var(--accent); border-color: var(--accent); }
+.map-legend .lg-warn { background: var(--warn); border-color: var(--warn); }
+.map-legend .lg-dead { background: transparent; border-color: var(--sub); opacity: .6; }
+.map-legend .lg-rough { background: transparent; border: 2px dashed var(--accent); }
+.map-legend .lg-ref { background: var(--surface); border: 3px solid var(--ink); }
+.mapbox { height: min(68vh, 640px); min-height: 320px; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; box-shadow: var(--shadow); background: var(--accent-soft); }
+#mapNote { margin-top: var(--space-2); }
+.wrap.view-map .tablebox, .wrap.view-map .cards { display: none !important; }
+.mapbox.leaflet-container { font: inherit; }
+.mapbox .leaflet-popup-content-wrapper, .mapbox .leaflet-popup-tip { background: var(--surface); color: var(--ink); }
+.mapbox .leaflet-popup-content { margin: var(--space-3); }
+.pin-pop .pp + .pp { border-top: 1px solid var(--line); margin-top: var(--space-2); padding-top: var(--space-2); }
+.pin-pop .name { font-weight: 700; margin-bottom: var(--space-1); }
+.pin-pop .btn { margin-top: var(--space-2); min-height: 32px; }
+.mapbox .pin-tip { font-weight: 700; }
+.leaflet-interactive.pin { animation: pinIn .36s cubic-bezier(.2,.8,.3,1.4) both; transform-box: fill-box; transform-origin: center; }
+@keyframes pinIn { from { opacity: 0; transform: scale(.3); } to { opacity: 1; transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) { .mapwrap, .leaflet-interactive.pin { animation: none; } }
+@media (max-width: 760px) { .mapbox { height: 62vh; } .map-legend { gap: var(--space-1) var(--space-2); } }
 @media (max-width: 1024px) { .tablebox { display: none; } .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(330px, 100%), 1fr)); align-items: start; } }
 @media (max-width: 520px) { .form { grid-template-columns: 1fr 1fr; gap: var(--space-2); } .kv { grid-template-columns: 92px 1fr; } .field .hint { font-size: .72rem; } } /* 폰에서도 짧은 칸은 두 개씩(2026-11-12) */
 @media (max-width: 340px) { .form { grid-template-columns: 1fr; } }
@@ -311,6 +339,10 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
     <button type="button" class="chip condtoggle" id="btnCondShow" aria-expanded="false" aria-controls="condChips"></button>
     <div class="chips" id="condChips"></div>
     <div class="filters">
+      <div class="seg" role="group" aria-label="보기">
+        <button type="button" data-view="list" aria-pressed="true">목록</button>
+        <button type="button" data-view="map" aria-pressed="false">지도</button>
+      </div>
       <div class="seg" role="group" aria-label="상태">
         <button type="button" data-status="live" aria-pressed="true">살아 있는 후보</button>
         <button type="button" data-status="all" aria-pressed="false">전체</button>
@@ -350,6 +382,7 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
         <option value="deposit">보증금 적은 순</option>
         <option value="deadline">마감 빠른 순</option>
         <option value="new">최근 올린 순</option>
+        <option value="dist">신대방역 가까운 순</option>
       </select>
       <span class="grow"></span>
       <span class="small muted" id="countLbl"></span>
@@ -388,6 +421,19 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
     </table>
   </div>
   <div class="cards" id="cards"></div>
+  <section class="mapwrap" id="mapWrap" hidden aria-label="지도">
+    <div class="map-legend">
+      <span><i class="lg-live"></i>살아 있는 후보</span>
+      <span><i class="lg-warn"></i>조건 걸림</span>
+      <span><i class="lg-dead"></i>탈락</span>
+      <span><i class="lg-rough"></i>대략 위치</span>
+      <span><i class="lg-ref"></i>신대방역</span>
+      <span class="grow"></span>
+      <button class="btn" id="btnFitMap" type="button">모두 보이게</button>
+    </div>
+    <div class="mapbox" id="mapBox"></div>
+    <p class="small muted" id="mapNote"></p>
+  </section>
   <div class="empty" id="emptyBox" hidden>
     <p><b>아직 비교할 집이 없어요.</b></p>
     <p class="small">«+ 매물 올리기»로 직접 찾은 집을 넣거나, 매일 아침 정기 검색이 찾은 매물(공고는 월·목)이 여기에 쌓여요.</p>
@@ -593,7 +639,8 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
       deposit: (x) => x.d.dep == null ? big : x.d.dep,
       deadline: (x) => x.it.deadline ? Date.parse(x.it.deadline) || big : big,
       new: (x) => -(Date.parse(x.it.createdAt || 0) || 0),
-    }[S.sort];
+      dist: (x) => { const m = distOf(x.it); return m == null ? big : m; },
+    }[S.sort] || ((x) => 0);
     list.sort((a, b) => key(a) - key(b) || String(a.it.name).localeCompare(String(b.it.name), "ko"));
     return list;
   }
@@ -681,7 +728,8 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
         newKind(it) === "new" ? el("span", { class: "badge b-new", text: "새 집" }) : newKind(it) === "upd" ? el("span", { class: "badge b-upd", text: "고침" }) : null,
         newCmts(it.id).length ? el("span", { class: "badge b-cmt", text: "새 의견 " + newCmts(it.id).length }) : cmtCount(it.id) ? el("span", { class: "badge", text: "의견 " + cmtCount(it.id) }) : null,
         (it.station || "") + (n(it.walkMin) != null ? " 도보 " + n(it.walkMin) + "분" : ""),
-        it.agent ? el("span", { class: "muted", text: " · " + it.agent }) : null),
+        it.agent ? el("span", { class: "muted", text: " · " + it.agent }) : null,
+        distText(it) ? el("span", { class: "dist", text: " · " + distText(it) }) : null),
       cmtTags(it.id).length ? el("div", { class: "flags", style: "margin-top:var(--space-1)" }, ...tagEls(it.id)) : null);
   }
   function moneyMonthly(d) { return d.rent || d.mgmt ? fmt(d.rent, 1) + " + " + fmt(d.mgmt, 1) : (d.dep == null ? "–" : "0"); }
@@ -745,7 +793,8 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
           el("div", { class: "ttl" },
             el("div", { class: "name" }, ...rankEls(it), dispName(it)),
             it.alias && it.name ? el("div", { class: "aka", text: it.name }) : null,
-            el("div", { class: "meta" }, d.isNear ? el("span", { class: "star", text: "★ " }) : null, meta.join(" · "))),
+            el("div", { class: "meta" }, d.isNear ? el("span", { class: "star", text: "★ " }) : null, meta.join(" · ")),
+            distText(it) ? el("div", { class: "meta dist" + (distText(it) === "위치 미확인" ? " unk" : "") }, pinSvg(), distText(it)) : null),
           el("label", { class: "cmpchk", title: "나란히 보기" }, cb2, el("span", { text: "비교" }))),
         el("div", { class: "kp" },
           el("div", null, el("span", { text: "전용·방" }), el("strong", { text: (d.area == null ? "–" : fmt(d.area, 1) + "㎡") + "·방" + (d.rooms == null ? "–" : d.rooms) })),
@@ -763,9 +812,131 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
       card.addEventListener("click", () => openDetail(it.id));
       cards.append(card);
     });
-    $("emptyBox").hidden = !(S.loaded && list.length === 0);
+    $("emptyBox").hidden = !(S.loaded && list.length === 0) || MAPV.on;
     renderCompare();
+    if (MAPV.on) renderMap();
   }
+
+  /* ---------- 위치·지도 (2026-11-13) ----------
+   * 좌표는 백엔드가 카카오 로컬로 구해 list 응답의 geo(id → {lat,lng,q})·ref(신대방역)로 준다. 시트에는 없다.
+   * q: 정확(번지·도로명까지) / 대략(동까지만, 점선 핀·«약») / 없음(못 찾음). 거리는 직선거리(하버사인).
+   */
+  const GEO = { loaded: false, at: {}, ref: null, err: null };
+  function distM(a, b) {
+    const R = 6371000, r = Math.PI / 180, dLa = (b.lat - a.lat) * r, dLo = (b.lng - a.lng) * r;
+    const h = Math.sin(dLa / 2) ** 2 + Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin(dLo / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(h));
+  }
+  const geoOf = (it) => { const g = GEO.at[it.id]; return g && g.lat != null ? g : null; };
+  const distOf = (it) => { const g = geoOf(it); return g && GEO.ref ? distM(g, GEO.ref) : null; };
+  const fmtDist = (m) => m < 1000 ? Math.round(m / 10) * 10 + "m" : (m / 1000).toFixed(1) + "km";
+  function distText(it) {
+    if (!GEO.loaded) return "";
+    const g = geoOf(it), m = distOf(it);
+    if (!g) return GEO.err ? "" : "위치 미확인"; // 위치 서비스 오류면 «위치 미확인»을 붙이지 않는다(번지 없음과 구분)
+    if (m == null) return "";
+    return GEO.ref.name + " 직선 " + (g.q === "대략" ? "약 " : "") + fmtDist(m);
+  }
+  const pinSvg = () => { const s = document.createElementNS("http://www.w3.org/2000/svg", "svg"); s.setAttribute("viewBox", "0 0 24 24"); s.setAttribute("aria-hidden", "true"); s.setAttribute("class", "pin-ic"); s.innerHTML = '<path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/>'; return s; };
+  // 카카오맵 링크(키 없이 여는 주소): 위치 보기 + 신대방역까지 걸어서 길찾기. 좌표가 없으면 주소로 찾기.
+  function mapLinks(it) {
+    const g = geoOf(it), nm = String(dispName(it)).replace(/[,/]/g, " ").slice(0, 30);
+    const a = (href, text) => el("a", { href: href, target: "_blank", rel: "noopener", text: text });
+    if (g) {
+      const out = [a("https://map.kakao.com/link/map/" + encodeURIComponent(nm) + "," + g.lat + "," + g.lng, "카카오맵 ↗")];
+      if (GEO.ref) out.push(a("https://map.kakao.com/link/by/walk/" + encodeURIComponent(nm) + "," + g.lat + "," + g.lng + "/" + encodeURIComponent(GEO.ref.name) + "," + GEO.ref.lat + "," + GEO.ref.lng, GEO.ref.name + "까지 걸어서 ↗"));
+      return out;
+    }
+    return it.address ? [a("https://map.kakao.com/link/search/" + encodeURIComponent(String(it.address).replace(/\([^)]*\)/g, " ").trim()), "카카오맵에서 찾기 ↗")] : [];
+  }
+
+  // 지도 보기: Leaflet(레포 vendor/leaflet, 처음 지도를 열 때만 불러옴) + OpenStreetMap 지도 그림
+  const MAPV = { on: false, map: null, layer: null, loading: null, fitted: false, key: "" };
+  function loadLeaflet() {
+    if (window.L) return Promise.resolve();
+    if (MAPV.loading) return MAPV.loading;
+    MAPV.loading = new Promise((ok, no) => {
+      document.head.append(el("link", { rel: "stylesheet", href: "vendor/leaflet/leaflet.css" }));
+      const s = el("script", { src: "vendor/leaflet/leaflet.js" });
+      s.onload = ok; s.onerror = () => { MAPV.loading = null; no(new Error("leaflet")); };
+      document.head.append(s);
+    });
+    return MAPV.loading;
+  }
+  function setView(v) {
+    MAPV.on = v === "map";
+    document.querySelectorAll("[data-view]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.view === v)));
+    $("mapWrap").hidden = !MAPV.on;
+    document.querySelector(".wrap").classList.toggle("view-map", MAPV.on);
+    lsSet("hh_view", v);
+    render();
+  }
+  // near: 처음 열 때는 신대방역 4km 안 핀만 맞춘다(멀리 있는 공고 하나 때문에 동네가 작게 보이지 않게). «모두 보이게»는 전부.
+  function fitAll(near) {
+    let pts = [];
+    MAPV.layer.eachLayer((m) => { if (m.getLatLng) pts.push(m.getLatLng()); });
+    if (near && GEO.ref) { const c = pts.filter((p) => distM({ lat: p.lat, lng: p.lng }, GEO.ref) < 4000); if (c.length > 1) pts = c; }
+    if (pts.length > 1) MAPV.map.fitBounds(pts, { padding: [32, 32], maxZoom: 16 });
+    else if (pts.length) MAPV.map.setView(pts[0], 15);
+  }
+  function pinPopup(group) {
+    const box = el("div", { class: "pin-pop" });
+    group.forEach(({ it, d }) => {
+      box.append(el("div", { class: "pp" },
+        el("div", { class: "name" }, ...rankEls(it), dispName(it)),
+        el("div", { class: "small muted", text: [(it.kind || "매물") + " · " + (it.deal || "–"), it.status || "후보", distText(it)].filter(Boolean).join(" · ") }),
+        el("div", { class: "small num", text: "보증금 " + fmt(d.dep) + " · 월 부담 " + (d.monthly == null ? "–" : fmt(d.monthly, 0)) + " · " + (d.area == null ? "–" : fmt(d.area, 1) + "㎡") }),
+        el("button", { class: "btn", type: "button", text: "자세히 보기", onclick: () => openDetail(it.id) })));
+    });
+    return box;
+  }
+  async function renderMap() {
+    const note = $("mapNote");
+    try { await loadLeaflet(); }
+    catch (e) { note.textContent = "지도 그림을 불러오지 못했어요. 인터넷 연결을 확인하고 새로고침해 주세요."; return; }
+    if (!MAPV.on) return;
+    if (!MAPV.map) {
+      MAPV.map = L.map("mapBox", { zoomControl: true }).setView([37.4875, 126.9131], 14);
+      L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>' }).addTo(MAPV.map);
+      MAPV.layer = L.layerGroup().addTo(MAPV.map);
+    }
+    setTimeout(() => MAPV.map && MAPV.map.invalidateSize(), 0);
+    const list = visibleItems();
+    // 같은 자리(같은 단지 다른 형)는 핀 하나에 묶는다
+    const groups = new Map(); let miss = 0, rough = 0;
+    list.forEach((x) => { const g = geoOf(x.it); if (!g) { miss++; return; } if (g.q === "대략") rough++; const k = g.lat.toFixed(5) + "," + g.lng.toFixed(5); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(x); });
+    const key = JSON.stringify([[...groups.keys()], list.map((x) => [x.it.id, x.it.status, x.d.hardFail, x.it.alias, x.it.rank, x.it.updatedAt]), GEO.ref]);
+    const shown = list.length - miss;
+    note.textContent = !GEO.loaded ? "위치 정보를 아직 받지 못했어요. 잠시 뒤 새로고침해 주세요."
+      : GEO.err && !shown ? "위치 서비스(카카오)에 연결하지 못했어요(" + GEO.err + "). 클로드에게 이 문구를 알려 주세요."
+      : shown + "곳을 지도에 표시했어요" + (miss ? " · 위치 미확인 " + miss + "곳" + (GEO.err ? "(위치 서비스 오류 " + GEO.err + ", 잠시 뒤 다시 시도)" : "(주소가 없거나 번지가 없어요)") : "") + (rough ? " · 점선 핀 " + rough + "곳은 동까지만 맞는 대략 위치예요" : "") + ". 거리는 직선거리예요.";
+    if (key === MAPV.key) return; // 30초마다 새로 읽어도 바뀐 게 없으면 핀을 다시 그리지 않는다(열린 창 유지)
+    MAPV.key = key;
+    MAPV.layer.clearLayers();
+    const cs = getComputedStyle(document.documentElement), cv = (v) => cs.getPropertyValue(v).trim();
+    if (GEO.ref) {
+      L.circleMarker([GEO.ref.lat, GEO.ref.lng], { radius: 7, color: cv("--ink"), weight: 3, fillColor: cv("--surface"), fillOpacity: 1, className: "pin pin-ref" })
+        .bindTooltip(GEO.ref.name, { permanent: true, direction: "top", offset: [0, -6], className: "pin-tip" }).addTo(MAPV.layer);
+    }
+    let i = 0;
+    groups.forEach((grp) => {
+      const g = geoOf(grp[0].it), live = grp.filter((x) => x.it.status !== "탈락"), dead = !live.length;
+      const top = live[0] || grp[0];
+      const color = dead ? cv("--sub") : top.d.hardFail ? cv("--warn") : cv("--accent");
+      const m = L.circleMarker([g.lat, g.lng], {
+        radius: dead ? 6 : 9, color: color, weight: 2, opacity: dead ? 0.55 : 1, dashArray: g.q === "대략" ? "4 3" : null,
+        fillColor: color, fillOpacity: dead ? 0.2 : g.q === "대략" ? 0.35 : 0.8, className: "pin" + (dead ? " pin-dead" : ""),
+      });
+      m.bindPopup(pinPopup(grp), { maxWidth: 260, autoPanPadding: [16, 16] });
+      m.bindTooltip(grp.length > 1 ? dispName(top.it) + " 외 " + (grp.length - 1) : dispName(top.it), { direction: "top", offset: [0, -8] });
+      m.addTo(MAPV.layer);
+      const p = m.getElement && m.getElement(); if (p) p.style.animationDelay = Math.min(i++, 12) * 0.03 + "s";
+    });
+    if (!MAPV.fitted && groups.size) { MAPV.fitted = true; fitAll(true); }
+  }
+  document.querySelectorAll("[data-view]").forEach((b) => b.addEventListener("click", () => setView(b.dataset.view)));
+  $("btnFitMap").addEventListener("click", () => { if (MAPV.map) fitAll(); });
+  if (lsGet("hh_view") === "map") setView("map"); // 지난번에 지도로 봤으면 지도로 연다(기기별)
 
   function renderCompare() {
     const picked = S.items.filter((it) => S.sel.has(it.id));
@@ -825,6 +996,7 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
       ...(it.alias ? [el("div", { text: "정식 이름" }), el("div", { text: it.name || "–" })] : []),
       el("div", { text: "종류" }), el("div", { text: (it.kind || "매물") + " · " + (it.deal || "–") + (it.source === "클로드" ? " · 클로드 검색" : "") + (it.fill === "대기" ? " · 클로드 정리 대기(매일 아침)" : it.fill === "완료" ? " · 클로드가 빈 칸 채움" : it.fill === "못함" ? " · 클로드가 링크를 못 열었어요(메모 참고)" : "") }),
       el("div", { text: "위치" }), el("div", { text: (it.station || "–") + (n(it.walkMin) != null ? " · 도보 " + n(it.walkMin) + "분" : "") + (it.address ? " · " + it.address : "") }),
+      ...(distText(it) || mapLinks(it).length ? [el("div", { text: "지도" }), el("div", { class: "maplinks" }, distText(it) ? el("span", { text: distText(it) }) : null, ...mapLinks(it))] : []),
       el("div", { text: "전용·방" }), el("div", { class: "num", text: (d.area == null ? "–" : fmt(d.area, 2) + "㎡ (" + fmt(py(d.area), 1) + "평)") + " · 방 " + (d.rooms ?? "–") + (it.baths ? " · 욕실 " + it.baths : "") }),
       el("div", { text: "보증금" }), el("div", { class: "num", text: fmt(d.dep) + (d.loan ? " (대출 필요 " + fmt(d.loan) + ")" : "") }),
       el("div", { text: "월세·관리비" }), el("div", { class: "num", text: fmt(d.rent, 1) + " · " + fmt(d.mgmt, 1) + (d.pfee ? " · 주차 " + fmt(d.pfee, 1) : "") }),
@@ -1131,10 +1303,11 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
   };
   async function refresh() {
     const j = await call("list");
-    const sig = JSON.stringify([j.items, j.cond, j.comments, j.agents]);
+    const sig = JSON.stringify([j.items, j.cond, j.comments, j.agents, j.geo, j.ref, j.geoError]);
     store.loaded = true;
     if (sig === store.sig) return;
     store.sig = sig;
+    GEO.loaded = !!j.geo; GEO.at = j.geo || {}; GEO.ref = j.ref && j.ref.lat ? j.ref : null; GEO.err = j.geoError || null;
     CM.list = Array.isArray(j.comments) ? j.comments : [];
     CM.agents = Array.isArray(j.agents) ? j.agents : [];
     store.items = new Map((j.items || []).map((it) => [it.id, fromServer(it)]));
