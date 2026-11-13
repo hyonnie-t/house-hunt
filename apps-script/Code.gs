@@ -5,7 +5,7 @@
  * 지우기는 deleted=TRUE 표시만 한다(줄은 남는다). 정기 검색은 deleted·탈락 집을 다시 넣지 않는다.
  * 정기 검색(Claude)은 이 웹 앱이 아니라 구글 시트를 직접 읽고 써서 비밀번호가 필요 없다.
  */
-const VERSION = 4;
+const VERSION = 5; // 2026-11-13 위치(geo·ref, 카카오 로컬)
 // 새 칸은 맨 뒤에만 더한다(이미 있는 줄의 칸 위치가 밀리지 않게)
 const COLS = ['id', 'name', 'kind', 'deal', 'station', 'walkMin', 'address', 'area', 'rooms', 'baths', 'deposit', 'rent', 'mgmt',
   'parking', 'parkingFee', 'moveIn', 'deadline', 'status', 'link', 'memo', 'images', 'source', 'createdAt', 'updatedAt', 'deleted',
@@ -13,7 +13,10 @@ const COLS = ['id', 'name', 'kind', 'deal', 'station', 'walkMin', 'address', 'ar
   'fill']; // 2026-11-12 «대기»면 정기 검색(Claude)이 링크를 열어 빈 칸만 채우고 «완료»로 바꾼다
 const NUM = ['walkMin', 'area', 'rooms', 'baths', 'deposit', 'rent', 'mgmt', 'parkingFee', 'rank'];
 
-function doGet() { return out_({ ok: true, app: 'house-hunt', hint: 'POST로 요청하세요' }); }
+function doGet(e) {
+  if (e && e.parameter && e.parameter.check === 'geo') { try { return out_(geoCheck_()); } catch (err) { return out_({ ok: false, error: String(err && err.message || err) }); } }
+  return out_({ ok: true, app: 'house-hunt', hint: 'POST로 요청하세요' });
+}
 
 function doPost(e) {
   try {
@@ -114,7 +117,75 @@ function list_() {
   const cs = condSheet_();
   const raw = cs.getRange(1, 1).getValue();
   if (raw) { try { cond = JSON.parse(raw); } catch (e) { cond = null; } }
-  return { ok: true, v: VERSION, items: items, cond: cond, comments: comments_(), agents: agents_() };
+  const g = geo_(items);
+  return { ok: true, v: VERSION, items: items, cond: cond, comments: comments_(), agents: agents_(), geo: g.geo, ref: g.ref };
+}
+
+/* ---------- 위치(2026-11-13): 주소 → 좌표는 카카오 로컬 API ----------
+ * 키는 스크립트 속성 KAKAO_REST_KEY(책장 중계와 같은 REST 키, 효니가 넣음). 코드·레포·로그에 넣지 않는다.
+ * 결과는 시트에 저장하지 않고 스크립트 캐시에 6시간만 둔다(카카오 API 결과를 따로 쌓지 않음).
+ * 보내는 것은 집 주소 글자뿐이다(이름·비밀번호·의견은 보내지 않는다).
+ */
+const GEO_TTL = 6 * 3600;
+const REF_PLACE = '신대방역 2호선';
+
+// 주소 글자를 검색에 맞게 다듬는다: 괄호 속 설명(동 이름·호수·«정확한 번지 미표시»)을 떼고 서울을 붙인다
+function geoQuery_(addr) {
+  let s = String(addr || '').replace(/\([^)]*\)/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!s) return '';
+  if (!/^서울/.test(s)) s = '서울 ' + s;
+  return s;
+}
+
+function geo_(items) {
+  const key = PropertiesService.getScriptProperties().getProperty('KAKAO_REST_KEY');
+  if (!key) return { geo: {}, ref: null, error: 'no_key' };
+  const cache = CacheService.getScriptCache();
+  const want = {}; // 검색어 → 집 id들
+  items.forEach((it) => { const q = geoQuery_(it.address); if (q) (want[q] = want[q] || []).push(it.id); });
+  const qs = Object.keys(want).concat(['ref:' + REF_PLACE]);
+  const ck = (q) => 'g1:' + Utilities.base64EncodeWebSafe(Utilities.newBlob(q).getBytes()).slice(0, 240);
+  const hit = cache.getAll(qs.map(ck));
+  const res = {}, miss = [];
+  qs.forEach((q) => { const v = hit[ck(q)]; if (v) res[q] = JSON.parse(v); else miss.push(q); });
+  let error = cache.get('g1:err');
+  if (miss.length && !error) { // 키·사용 설정 오류가 나면 10분 동안은 다시 부르지 않는다(30초마다 새로 읽으므로)
+    const head = { headers: { Authorization: 'KakaoAK ' + key }, muteHttpExceptions: true };
+    const url = (q) => q.indexOf('ref:') === 0
+      ? 'https://dapi.kakao.com/v2/local/search/keyword.json?size=1&query=' + encodeURIComponent(q.slice(4))
+      : 'https://dapi.kakao.com/v2/local/search/address.json?size=1&query=' + encodeURIComponent(q);
+    const out = UrlFetchApp.fetchAll(miss.slice(0, 40).map((q) => Object.assign({ url: url(q) }, head)));
+    const put = {};
+    out.forEach((r, i) => {
+      const q = miss[i], code = r.getResponseCode();
+      if (code !== 200) { error = 'kakao_' + code; return; }
+      const doc = (JSON.parse(r.getContentText()).documents || [])[0];
+      // REGION(동·구까지만 맞음)은 «대략», 번지·도로명까지 맞으면 «정확», 못 찾으면 «없음»
+      const v = !doc ? { q: '없음' }
+        : { lat: Math.round(Number(doc.y) * 1e6) / 1e6, lng: Math.round(Number(doc.x) * 1e6) / 1e6, q: (doc.address_type === 'REGION' || doc.address_type === 'ROAD') ? '대략' : '정확' };
+      if (q.indexOf('ref:') === 0) v.q = '정확';
+      res[q] = v; put[ck(q)] = JSON.stringify(v);
+    });
+    if (Object.keys(put).length) cache.putAll(put, GEO_TTL);
+    if (error) cache.put('g1:err', error, 600);
+  }
+  const geo = {};
+  Object.keys(want).forEach((q) => { const v = res[q]; if (v) want[q].forEach((id) => { geo[id] = v; }); });
+  const r0 = res['ref:' + REF_PLACE];
+  const ref = r0 && r0.lat ? { name: '신대방역', lat: r0.lat, lng: r0.lng } : null;
+  return { geo: geo, ref: ref, error: error };
+}
+
+// 비밀번호 없이 상태만 보는 점검(집 주소·좌표는 돌려주지 않는다): ?check=geo
+function geoCheck_() {
+  const key = PropertiesService.getScriptProperties().getProperty('KAKAO_REST_KEY');
+  if (!key) return { ok: false, error: 'no_key' };
+  const items = sheet_().getLastRow() > 1 ? sheet_().getRange(2, 1, sheet_().getLastRow() - 1, COLS.length).getValues()
+    .filter((r) => r[0]).map(rowToItem_).filter((it) => !it.deleted) : [];
+  const g = geo_(items);
+  const cnt = { 정확: 0, 대략: 0, 없음: 0, 주소없음: 0, 미확인: 0 };
+  items.forEach((it) => { if (!geoQuery_(it.address)) cnt.주소없음++; else if (g.geo[it.id]) cnt[g.geo[it.id].q]++; else cnt.미확인++; });
+  return { ok: !g.error, error: g.error, ref: !!g.ref, count: cnt };
 }
 
 // 의견(둘이 남기는 한 줄 메모): 탭 «의견», 칸 id·itemId·who·text·at·deleted. 지우기는 deleted 표시만 한다.
