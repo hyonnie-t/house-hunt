@@ -181,6 +181,16 @@ function geo_(items) {
   return { geo: geo, ref: ref, error: error };
 }
 
+// 처음 한 번: 편집기에서 이 함수를 골라 «실행» → 권한 허용(외부 서비스 호출). 웹 앱이 카카오를 부르려면 소유자 허락이 필요하다.
+// 로그에는 응답 코드만 남긴다(키·주소는 남기지 않음).
+function allowKakao() {
+  const key = PropertiesService.getScriptProperties().getProperty('KAKAO_REST_KEY');
+  if (!key) { console.log('스크립트 속성 KAKAO_REST_KEY가 없어요'); return; }
+  const r = UrlFetchApp.fetch('https://dapi.kakao.com/v2/local/search/keyword.json?size=1&query=' + encodeURIComponent(REF_PLACE),
+    { headers: { Authorization: 'KakaoAK ' + key }, muteHttpExceptions: true });
+  console.log('카카오 응답 코드: ' + r.getResponseCode() + (r.getResponseCode() === 200 ? ' (정상)' : ''));
+}
+
 // 비밀번호 없이 상태만 보는 점검(집 주소·좌표는 돌려주지 않는다): ?check=geo
 function geoCheck_() {
   const key = PropertiesService.getScriptProperties().getProperty('KAKAO_REST_KEY');

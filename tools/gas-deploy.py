@@ -76,6 +76,8 @@ elif cmd == "deploy":
         set_version(prev, f"되돌림: 버전 {v} 문제")
         sys.exit("배포 실패, 되돌림")
     print(f"배포 완료: 버전 {prev} → {v}, 주소 그대로")
+elif cmd == "manifest":
+    print([f for f in files if f["name"] == "appsscript"][0]["source"])
 elif cmd == "smoke":
     smoke()
 elif cmd == "rollback":
