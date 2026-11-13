@@ -681,7 +681,8 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
         newKind(it) === "new" ? el("span", { class: "badge b-new", text: "새 집" }) : newKind(it) === "upd" ? el("span", { class: "badge b-upd", text: "고침" }) : null,
         newCmts(it.id).length ? el("span", { class: "badge b-cmt", text: "새 의견 " + newCmts(it.id).length }) : cmtCount(it.id) ? el("span", { class: "badge", text: "의견 " + cmtCount(it.id) }) : null,
         (it.station || "") + (n(it.walkMin) != null ? " 도보 " + n(it.walkMin) + "분" : ""),
-        it.agent ? el("span", { class: "muted", text: " · " + it.agent }) : null));
+        it.agent ? el("span", { class: "muted", text: " · " + it.agent }) : null),
+      cmtTags(it.id).length ? el("div", { class: "flags", style: "margin-top:var(--space-1)" }, ...tagEls(it.id)) : null);
   }
   function moneyMonthly(d) { return d.rent || d.mgmt ? fmt(d.rent, 1) + " + " + fmt(d.mgmt, 1) : (d.dep == null ? "–" : "0"); }
   function dateLine(it) {
