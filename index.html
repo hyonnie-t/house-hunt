@@ -181,6 +181,10 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
 .card .sub { font-size: .8rem; color: var(--sub); margin-bottom: var(--space-2); }
 .card .last-cmt { margin-top: var(--space-2); padding: var(--space-1) var(--space-2); border-left: 3px solid var(--accent); background: var(--bg); border-radius: 0 6px 6px 0; font-size: .82rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .card .last-cmt b { color: var(--accent); }
+/* 의견 태그(2026-11-13): 의견 글에서 키워드로 뽑은 이름표. good=초록, warn=주황 */
+.f.tg-good { background: var(--ok-soft); color: var(--ok); font-weight: 600; }
+.f.tg-warn { background: var(--warn-soft); color: var(--warn); font-weight: 600; }
+.card .last-cmt { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; font-size: .88rem; }
 .condtoggle { display: none; }
 .lg-only { display: inline; }
 #gateSheet { background: var(--bg); align-items: center; justify-content: center; }
@@ -325,6 +329,17 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
         <option value="보통">보통</option>
         <option value="낮음">낮음</option>
         <option value="none">미정</option>
+      </select>
+      <label class="small muted" for="tagSel">의견 태그</label>
+      <select id="tagSel">
+        <option value="all">전부</option>
+        <option value="주차">주차 가능</option>
+        <option value="넓음">넓음</option>
+        <option value="좁음">좁음·작음</option>
+        <option value="낡음">연식 오래됨</option>
+        <option value="위치">위치 걸림</option>
+        <option value="1순위">1순위</option>
+        <option value="none">의견 없음</option>
       </select>
       <label class="small muted" for="sortSel">정렬</label>
       <select id="sortSel">
@@ -508,7 +523,7 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
 (function () {
   "use strict";
   const DEFAULT_COND = { minArea: 33, minRooms: 2, selfFunds: 8000, maxDeposit: 33000, monthlyTarget: 100, rate: 2.5, moveBy: "2027-02-21", near: "신대방, 신사동, 보라매, 신림, 대방" };
-  const S = { items: [], cond: Object.assign({}, DEFAULT_COND), status: "live", kind: "all", sort: "score", pri: "all", sel: new Set(), db: null, assets: null, canWrite: true, editing: null, pending: [], keepPhotos: [], loaded: false };
+  const S = { items: [], cond: Object.assign({}, DEFAULT_COND), status: "live", kind: "all", sort: "score", pri: "all", tag: "all", sel: new Set(), db: null, assets: null, canWrite: true, editing: null, pending: [], keepPhotos: [], loaded: false };
   const imgSrc = (p) => /^(https?:|plans\/)/.test(p) ? p : "/_blob/" + p;
   const CM = { list: [], agents: [], who: (() => { try { return localStorage.getItem("hh_who") || ""; } catch (e) { return ""; } })() };
   const $ = (id) => document.getElementById(id);
@@ -567,6 +582,8 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
     if (NEWS.only) list = list.filter((x) => newKind(x.it) || newCmts(x.it.id).length);
     if (S.pri === "none") list = list.filter((x) => !x.it.priority);
     else if (S.pri !== "all") list = list.filter((x) => x.it.priority === S.pri);
+    if (S.tag === "none") list = list.filter((x) => !cmtCount(x.it.id));
+    else if (S.tag !== "all") list = list.filter((x) => cmtTags(x.it.id).some((t) => t.key === S.tag));
     const big = 1e12;
     const key = {
       score: (x) => -(x.d.score - (x.d.hardFail ? 10 : 0)),
@@ -611,6 +628,26 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
     return "";
   }
   function newCmts(id) { const t = sinceT(); return CM.list.filter((c) => c.itemId === id && (Date.parse(c.at || 0) || 0) > t && (!CM.who || c.who !== CM.who)); }
+  // 의견 태그(2026-11-13): 의견 글에서 키워드로 뽑는다(저장 칸 없음). 나쁜 쪽 말(걸려·불가·좁)이 같이 있으면 주황.
+  const TAG_RULES = [
+    { key: "1순위", re: /1순위|최우선/, label: "1순위", cls: "good" },
+    { key: "주차", re: /주차/, label: "주차 가능", bad: /주차[^.,]{0,6}(걸|불가|안 ?돼|못)/, badLabel: "주차 걸림" },
+    { key: "넓음", re: /넓/, label: "넓음", cls: "good" },
+    { key: "좁음", re: /좁|작은 ?느낌|작아/, label: "좁음·작음", cls: "warn" },
+    { key: "낡음", re: /연식|오래|낡/, label: "연식 오래됨", cls: "warn" },
+    { key: "위치", re: /위치|멀|신림이랑/, label: "위치 걸림", cls: "warn" }
+  ];
+  function cmtTags(id) {
+    const txt = CM.list.filter((c) => c.itemId === id).map((c) => c.text || "").join(" ");
+    const out = [];
+    TAG_RULES.forEach((r) => {
+      if (!r.re.test(txt)) return;
+      if (r.bad && r.bad.test(txt)) out.push({ key: r.key, label: r.badLabel, cls: "warn" });
+      else out.push({ key: r.key, label: r.label, cls: r.cls || "good" });
+    });
+    return out;
+  }
+  const tagEls = (id) => cmtTags(id).map((t) => el("span", { class: "f tg-" + t.cls, text: t.label }));
   function lastCmt(id) { const l = CM.list.filter((c) => c.itemId === id); return l.length ? l.reduce((a, b) => ((Date.parse(b.at || 0) || 0) >= (Date.parse(a.at || 0) || 0) ? b : a)) : null; }
   // 목록을 처음 받으면: 새 «보기»의 시작이면 지금을 hh_visit로 남긴다(기준은 다음 보기 때 옮겨짐)
   function markVisit() { const v = lsGet(VISIT_KEY); if (!v || Date.now() - (Date.parse(v) || 0) > VISIT_MS) lsSet(VISIT_KEY, new Date().toISOString()); }
@@ -719,6 +756,7 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
           nk === "new" ? el("span", { class: "f new", text: "새 집" }) : nk === "upd" ? el("span", { class: "f upd", text: "고침" }) : null,
           nc ? el("span", { class: "f newcmt", text: "새 의견 " + nc }) : null,
           it.fill === "대기" ? el("span", { class: "f unk", text: "클로드 정리 대기" }) : null,
+          ...tagEls(it.id),
           ...(probs.length ? probs.map((f) => el("span", { class: "f " + f[0], text: f[1] })) : [el("span", { class: "f ok", text: "조건 다 맞음" })])),
         lc ? el("div", { class: "last-cmt" }, el("b", { text: (lc.who || "?") + " " }), lc.text || "") : null);
       card.addEventListener("click", () => openDetail(it.id));
@@ -1036,6 +1074,7 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
   document.querySelectorAll("[data-status]").forEach((b) => b.addEventListener("click", () => { S.status = b.dataset.status; document.querySelectorAll("[data-status]").forEach((x) => x.setAttribute("aria-pressed", String(x === b))); render(); }));
   document.querySelectorAll("[data-kind]").forEach((b) => b.addEventListener("click", () => { S.kind = b.dataset.kind; document.querySelectorAll("[data-kind]").forEach((x) => x.setAttribute("aria-pressed", String(x === b))); render(); }));
   $("priSel").addEventListener("change", (e) => { S.pri = e.target.value; render(); });
+  $("tagSel").addEventListener("change", (e) => { S.tag = e.target.value; render(); });
   $("btnCondShow").addEventListener("click", () => { const open = $("topBar").classList.toggle("cond-open"); $("btnCondShow").setAttribute("aria-expanded", String(open)); render(); });
   $("sortSel").addEventListener("change", (e) => { S.sort = e.target.value; try { localStorage.setItem("hb_sort", S.sort); } catch (err) { /* 저장 안 돼도 됨 */ } render(); });
   try { const s = localStorage.getItem("hb_sort"); if (s) { S.sort = s; $("sortSel").value = s; } } catch (err) { /* 무시 */ }
