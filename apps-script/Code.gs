@@ -117,8 +117,10 @@ function list_() {
   const cs = condSheet_();
   const raw = cs.getRange(1, 1).getValue();
   if (raw) { try { cond = JSON.parse(raw); } catch (e) { cond = null; } }
-  const g = geo_(items);
-  return { ok: true, v: VERSION, items: items, cond: cond, comments: comments_(), agents: agents_(), geo: g.geo, ref: g.ref };
+  // 위치는 덧붙이는 기능이라, 실패해도 집 목록은 그대로 돌려준다(검토 2026-11-13)
+  let g;
+  try { g = geo_(items); } catch (err) { g = { geo: {}, ref: null, error: 'geo_fail' }; }
+  return { ok: true, v: VERSION, items: items, cond: cond, comments: comments_(), agents: agents_(), geo: g.geo, ref: g.ref, geoError: g.error || null };
 }
 
 /* ---------- 위치(2026-11-13): 주소 → 좌표는 카카오 로컬 API ----------
@@ -133,7 +135,7 @@ const REF_PLACE = '신대방역 2호선';
 function geoQuery_(addr) {
   let s = String(addr || '').replace(/\([^)]*\)/g, ' ').replace(/\s+/g, ' ').trim();
   if (!s) return '';
-  if (!/^서울/.test(s)) s = '서울 ' + s;
+  if (/^[가-힣]{1,4}구\s/.test(s)) s = '서울 ' + s; // «관악구 …»처럼 구로 시작할 때만(경기 등 다른 시·도는 그대로)
   return s;
 }
 
@@ -145,7 +147,8 @@ function geo_(items) {
   items.forEach((it) => { const q = geoQuery_(it.address); if (q) (want[q] = want[q] || []).push(it.id); });
   const qs = Object.keys(want).concat(['ref:' + REF_PLACE]);
   const ck = (q) => 'g1:' + Utilities.base64EncodeWebSafe(Utilities.newBlob(q).getBytes()).slice(0, 240);
-  const hit = cache.getAll(qs.map(ck));
+  const hit = {};
+  for (let i = 0; i < qs.length; i += 90) Object.assign(hit, cache.getAll(qs.slice(i, i + 90).map(ck))); // getAll은 한 번에 100개까지
   const res = {}, miss = [];
   qs.forEach((q) => { const v = hit[ck(q)]; if (v) res[q] = JSON.parse(v); else miss.push(q); });
   let error = cache.get('g1:err');
@@ -154,7 +157,7 @@ function geo_(items) {
     const url = (q) => q.indexOf('ref:') === 0
       ? 'https://dapi.kakao.com/v2/local/search/keyword.json?size=1&query=' + encodeURIComponent(q.slice(4))
       : 'https://dapi.kakao.com/v2/local/search/address.json?size=1&query=' + encodeURIComponent(q);
-    const out = UrlFetchApp.fetchAll(miss.slice(0, 40).map((q) => Object.assign({ url: url(q) }, head)));
+    const out = UrlFetchApp.fetchAll(miss.slice(0, 80).map((q) => Object.assign({ url: url(q) }, head)));
     const put = {};
     out.forEach((r, i) => {
       const q = miss[i], code = r.getResponseCode();
@@ -163,16 +166,18 @@ function geo_(items) {
       // REGION(동·구까지만 맞음)은 «대략», 번지·도로명까지 맞으면 «정확», 못 찾으면 «없음»
       const v = !doc ? { q: '없음' }
         : { lat: Math.round(Number(doc.y) * 1e6) / 1e6, lng: Math.round(Number(doc.x) * 1e6) / 1e6, q: (doc.address_type === 'REGION' || doc.address_type === 'ROAD') ? '대략' : '정확' };
-      if (q.indexOf('ref:') === 0) v.q = '정확';
+      if (q.indexOf('ref:') === 0) { if (!doc) return; v.q = '정확'; } // 역을 못 찾은 결과는 캐시하지 않는다(아래 기본 좌표 사용)
       res[q] = v; put[ck(q)] = JSON.stringify(v);
     });
-    if (Object.keys(put).length) cache.putAll(put, GEO_TTL);
+    const keys = Object.keys(put);
+    for (let i = 0; i < keys.length; i += 90) { const part = {}; keys.slice(i, i + 90).forEach((k) => { part[k] = put[k]; }); cache.putAll(part, GEO_TTL); }
     if (error) cache.put('g1:err', error, 600);
   }
   const geo = {};
   Object.keys(want).forEach((q) => { const v = res[q]; if (v) want[q].forEach((id) => { geo[id] = v; }); });
   const r0 = res['ref:' + REF_PLACE];
-  const ref = r0 && r0.lat ? { name: '신대방역', lat: r0.lat, lng: r0.lng } : null;
+  // 키가 있는데 역 검색만 안 될 때는 신대방역(2호선) 대략 좌표로 대신한다
+  const ref = r0 && r0.lat ? { name: '신대방역', lat: r0.lat, lng: r0.lng } : (error ? null : { name: '신대방역', lat: 37.48749, lng: 126.91311 });
   return { geo: geo, ref: ref, error: error };
 }
 

@@ -821,7 +821,7 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
    * 좌표는 백엔드가 카카오 로컬로 구해 list 응답의 geo(id → {lat,lng,q})·ref(신대방역)로 준다. 시트에는 없다.
    * q: 정확(번지·도로명까지) / 대략(동까지만, 점선 핀·«약») / 없음(못 찾음). 거리는 직선거리(하버사인).
    */
-  const GEO = { loaded: false, at: {}, ref: null };
+  const GEO = { loaded: false, at: {}, ref: null, err: null };
   function distM(a, b) {
     const R = 6371000, r = Math.PI / 180, dLa = (b.lat - a.lat) * r, dLo = (b.lng - a.lng) * r;
     const h = Math.sin(dLa / 2) ** 2 + Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin(dLo / 2) ** 2;
@@ -833,7 +833,7 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
   function distText(it) {
     if (!GEO.loaded) return "";
     const g = geoOf(it), m = distOf(it);
-    if (!g) return "위치 미확인";
+    if (!g) return GEO.err ? "" : "위치 미확인"; // 위치 서비스 오류면 «위치 미확인»을 붙이지 않는다(번지 없음과 구분)
     if (m == null) return "";
     return GEO.ref.name + " 직선 " + (g.q === "대략" ? "약 " : "") + fmtDist(m);
   }
@@ -908,7 +908,8 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
     const key = JSON.stringify([[...groups.keys()], list.map((x) => [x.it.id, x.it.status, x.d.hardFail, x.it.alias, x.it.rank, x.it.updatedAt]), GEO.ref]);
     const shown = list.length - miss;
     note.textContent = !GEO.loaded ? "위치 정보를 아직 받지 못했어요. 잠시 뒤 새로고침해 주세요."
-      : shown + "곳을 지도에 표시했어요" + (miss ? " · 위치 미확인 " + miss + "곳(주소가 없거나 번지가 없어요)" : "") + (rough ? " · 점선 핀 " + rough + "곳은 동까지만 맞는 대략 위치예요" : "") + ". 거리는 직선거리예요.";
+      : GEO.err && !shown ? "위치 서비스(카카오)에 연결하지 못했어요(" + GEO.err + "). 클로드에게 이 문구를 알려 주세요."
+      : shown + "곳을 지도에 표시했어요" + (miss ? " · 위치 미확인 " + miss + "곳" + (GEO.err ? "(위치 서비스 오류 " + GEO.err + ", 잠시 뒤 다시 시도)" : "(주소가 없거나 번지가 없어요)") : "") + (rough ? " · 점선 핀 " + rough + "곳은 동까지만 맞는 대략 위치예요" : "") + ". 거리는 직선거리예요.";
     if (key === MAPV.key) return; // 30초마다 새로 읽어도 바뀐 게 없으면 핀을 다시 그리지 않는다(열린 창 유지)
     MAPV.key = key;
     MAPV.layer.clearLayers();
@@ -1302,11 +1303,11 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
   };
   async function refresh() {
     const j = await call("list");
-    const sig = JSON.stringify([j.items, j.cond, j.comments, j.agents, j.geo, j.ref]);
+    const sig = JSON.stringify([j.items, j.cond, j.comments, j.agents, j.geo, j.ref, j.geoError]);
     store.loaded = true;
     if (sig === store.sig) return;
     store.sig = sig;
-    GEO.loaded = !!j.geo; GEO.at = j.geo || {}; GEO.ref = j.ref && j.ref.lat ? j.ref : null;
+    GEO.loaded = !!j.geo; GEO.at = j.geo || {}; GEO.ref = j.ref && j.ref.lat ? j.ref : null; GEO.err = j.geoError || null;
     CM.list = Array.isArray(j.comments) ? j.comments : [];
     CM.agents = Array.isArray(j.agents) ? j.agents : [];
     store.items = new Map((j.items || []).map((it) => [it.id, fromServer(it)]));
