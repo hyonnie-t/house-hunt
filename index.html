@@ -278,6 +278,28 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
 .gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: var(--space-2); margin: var(--space-2) 0; }
 .gallery a { display: block; border-radius: 8px; overflow: hidden; border: 1px solid var(--line); background: var(--unk-soft); aspect-ratio: 4 / 3; max-width: 100%; }
 .gallery img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.gallery button.ph { display: block; width: 100%; padding: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--unk-soft); aspect-ratio: 4 / 3; cursor: zoom-in; }
+.gallery .more { font-size: .78rem; color: var(--sub); grid-column: 1 / -1; margin-top: calc(-1 * var(--space-1)); }
+/* 사진 넘겨 보기: 한 번 밀면 한 장(scroll-snap), PC는 ◀▶·방향키 */
+.pv { position: fixed; inset: 0; z-index: 40; background: #0b0d0c; display: flex; flex-direction: column; animation: pvIn .18s ease-out; }
+.pv[hidden] { display: none !important; }
+@keyframes pvIn { from { opacity: 0; } to { opacity: 1; } }
+.pv-top { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding: var(--space-2) var(--space-3); padding-top: max(var(--space-2), env(safe-area-inset-top)); color: #fff; font-size: .9rem; }
+.pv-top button { min-height: 40px; padding: 0 var(--space-3); border: 0; border-radius: 8px; background: rgba(255,255,255,.14); color: #fff; font-size: .9rem; }
+.pv-track { flex: 1; min-height: 0; display: flex; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; scrollbar-width: none; overscroll-behavior: contain; }
+.pv-track::-webkit-scrollbar { display: none; }
+.pv-slide { flex: 0 0 100%; scroll-snap-align: center; scroll-snap-stop: always; display: flex; align-items: center; justify-content: center; padding: var(--space-2); }
+.pv-slide img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 4px; user-select: none; -webkit-user-drag: none; }
+.pv-nav { position: absolute; top: 50%; transform: translateY(-50%); width: 48px; height: 48px; border: 0; border-radius: 50%; background: rgba(255,255,255,.16); color: #fff; font-size: 1.4rem; line-height: 1; }
+.pv-nav:hover { background: rgba(255,255,255,.28); }
+.pv-nav[disabled] { opacity: .25; }
+.pv-nav[hidden] { display: none; }
+.pv-prev { left: var(--space-3); } .pv-next { right: var(--space-3); }
+.pv-dots { display: flex; justify-content: center; gap: var(--space-1); min-height: 8px; padding: var(--space-2); padding-bottom: max(var(--space-3), env(safe-area-inset-bottom)); }
+.pv-dots i { width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,.3); transition: background .15s, transform .15s; }
+.pv-dots i.on { background: #fff; transform: scale(1.25); }
+@media (hover: none) { .pv-nav { display: none; } }
+@media (prefers-reduced-motion: reduce) { .pv { animation: none; } }
 .kv { display: grid; grid-template-columns: 110px 1fr; gap: var(--space-1) var(--space-2); font-size: .9rem; margin: var(--space-2) 0; }
 .kv div:nth-child(odd) { color: var(--sub); }
 .actions { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-3); }
@@ -453,6 +475,15 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
     </div>
     <div id="dBody"></div>
   </div>
+</div>
+
+<!-- 사진 넘겨 보기 -->
+<div class="pv" id="photoViewer" hidden role="dialog" aria-modal="true" aria-label="사진 넘겨 보기">
+  <div class="pv-top"><span id="pvCount" aria-live="polite"></span><button type="button" id="pvClose">닫기</button></div>
+  <div class="pv-track" id="pvTrack" tabindex="-1"></div>
+  <button type="button" class="pv-nav pv-prev" id="pvPrev" aria-label="이전 사진">‹</button>
+  <button type="button" class="pv-nav pv-next" id="pvNext" aria-label="다음 사진">›</button>
+  <div class="pv-dots" id="pvDots" aria-hidden="true"></div>
 </div>
 
 <!-- 입력 -->
@@ -984,7 +1015,41 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
   function closeSheets() { for (const id of ["detailSheet", "formSheet", "condSheet", "agentSheet"]) $(id).hidden = true; }
   document.querySelectorAll("[data-close]").forEach((b) => b.addEventListener("click", closeSheets));
   document.querySelectorAll(".sheet").forEach((s) => s.addEventListener("click", (e) => { if (e.target === s) closeSheets(); }));
-  document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeSheets(); });
+  document.addEventListener("keydown", (e) => {
+    if (!$("photoViewer").hidden) { if (e.key === "Escape") closeViewer(); else if (e.key === "ArrowLeft") pvGo(PV.i - 1); else if (e.key === "ArrowRight") pvGo(PV.i + 1); return; }
+    if (e.key === "Escape") closeSheets();
+  });
+
+  /* ---------- 사진 넘겨 보기 ---------- */
+  const PV = { list: [], i: 0, back: null };
+  function pvMark() {
+    const n = PV.list.length; $("pvCount").textContent = (PV.i + 1) + " / " + n;
+    $("pvPrev").disabled = PV.i <= 0; $("pvNext").disabled = PV.i >= n - 1;
+    $("pvDots").querySelectorAll("i").forEach((d, k) => d.classList.toggle("on", k === PV.i));
+  }
+  function pvGo(i, instant) {
+    const t = $("pvTrack"); i = Math.max(0, Math.min(PV.list.length - 1, i));
+    const smooth = !instant && !matchMedia("(prefers-reduced-motion: reduce)").matches;
+    t.scrollTo({ left: i * t.clientWidth, behavior: smooth ? "smooth" : "auto" }); PV.i = i; pvMark();
+  }
+  function openViewer(list, start, alt) {
+    if (!list.length) return;
+    PV.list = list; PV.back = document.activeElement;
+    const t = $("pvTrack"); t.replaceChildren(); $("pvDots").replaceChildren();
+    list.forEach((p, k) => { t.append(el("div", { class: "pv-slide" }, el("img", { src: p.src, alt: alt + " " + (k + 1) + "/" + list.length, draggable: "false" }))); if (list.length > 1) $("pvDots").append(el("i")); });
+    $("pvPrev").hidden = $("pvNext").hidden = list.length < 2;
+    $("photoViewer").hidden = false; document.body.style.overflow = "hidden";
+    pvGo(start, true); $("pvClose").focus();
+  }
+  function closeViewer() { $("photoViewer").hidden = true; document.body.style.overflow = ""; if (PV.back && PV.back.focus) PV.back.focus(); }
+  $("pvClose").addEventListener("click", closeViewer);
+  $("pvPrev").addEventListener("click", () => pvGo(PV.i - 1));
+  $("pvNext").addEventListener("click", () => pvGo(PV.i + 1));
+  $("pvTrack").addEventListener("click", (e) => { if (e.target.classList.contains("pv-slide")) closeViewer(); });
+  function pvSync() { const t = $("pvTrack"); const i = Math.round(t.scrollLeft / Math.max(1, t.clientWidth)); if (i !== PV.i) { PV.i = i; pvMark(); } }
+  $("pvTrack").addEventListener("scroll", pvSync, { passive: true });
+  $("pvTrack").addEventListener("scrollend", pvSync);
+  window.addEventListener("resize", () => { if (!$("photoViewer").hidden) pvGo(PV.i, true); });
 
   function openDetail(id) {
     const it = S.items.find((x) => x.id === id); if (!it) return;
@@ -994,7 +1059,10 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
     const photos = Array.isArray(it.photos) ? it.photos : [];
     if (photos.length) {
       const g = el("div", { class: "gallery" });
-      photos.forEach((p) => { const pid = typeof p === "string" ? p : p.id; const isPdf = typeof p === "object" && /pdf/.test(p.type || ""); const a = el("a", { href: imgSrc(pid), target: "_blank", rel: "noopener" }, isPdf ? el("div", { class: "thumb" }, el("div", { class: "pdf", text: "PDF 열기" })) : el("img", { src: imgSrc(pid), alt: (it.name || "") + " 사진", loading: "lazy" })); g.append(a); });
+      const pics = photos.map((p) => ({ src: imgSrc(typeof p === "string" ? p : p.id), pdf: typeof p === "object" && /pdf/.test(p.type || "") }));
+      const imgs = pics.filter((x) => !x.pdf);
+      pics.forEach((p, i) => { g.append(p.pdf ? el("a", { href: p.src, target: "_blank", rel: "noopener" }, el("div", { class: "thumb" }, el("div", { class: "pdf", text: "PDF 열기" }))) : el("button", { type: "button", class: "ph", "aria-label": "사진 크게 보기", onclick: () => openViewer(imgs, pics.slice(0, i).filter((x) => !x.pdf).length, (it.name || "") + " 사진") }, el("img", { src: p.src, alt: (it.name || "") + " 사진", loading: "lazy" }))); });
+      if (imgs.length > 1) g.append(el("div", { class: "more", text: "사진을 누르면 크게 보고 옆으로 넘길 수 있어요" }));
       body.append(g);
     }
     const link = safeUrl(it.link || "");
