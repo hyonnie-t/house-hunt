@@ -620,11 +620,16 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
     return { dep, rent, mgmt, pfee, loan, interest, monthly, area, rooms, flags, isNear, score, hardFail };
   }
 
+  // 상태(탈락 숨김)·종류 필터만 거친 집. 새 소식 줄도 이 범위로 세어, 숨겨진 탈락 집을 «새 집»으로 세지 않는다(2026-11-17)
+  function baseItems() {
+    let list = S.items;
+    if (S.status === "live") list = list.filter((it) => it.status !== "탈락");
+    else if (S.status === "탈락") list = list.filter((it) => it.status === "탈락");
+    if (S.kind !== "all") list = list.filter((it) => (it.kind || "매물") === S.kind);
+    return list;
+  }
   function visibleItems() {
-    let list = S.items.map((it) => ({ it, d: derive(it) }));
-    if (S.status === "live") list = list.filter((x) => x.it.status !== "탈락");
-    else if (S.status === "탈락") list = list.filter((x) => x.it.status === "탈락");
-    if (S.kind !== "all") list = list.filter((x) => (x.it.kind || "매물") === S.kind);
+    let list = baseItems().map((it) => ({ it, d: derive(it) }));
     if (NEWS.only) list = list.filter((x) => newKind(x.it) || newCmts(x.it.id).length);
     if (S.pri === "none") list = list.filter((x) => !x.it.priority);
     else if (S.pri !== "all") list = list.filter((x) => x.it.priority === S.pri);
@@ -701,7 +706,7 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
   function renderNews() {
     const bar = $("newsBar");
     let nNew = 0, nUpd = 0, nCmt = 0;
-    S.items.forEach((it) => { const k = newKind(it); if (k === "new") nNew++; else if (k === "upd") nUpd++; nCmt += newCmts(it.id).length; });
+    baseItems().forEach((it) => { const k = newKind(it); if (k === "new") nNew++; else if (k === "upd") nUpd++; nCmt += newCmts(it.id).length; });
     if (!S.loaded || !(nNew + nUpd + nCmt)) { bar.hidden = true; if (NEWS.only) { NEWS.only = false; } return; }
     const parts = [];
     if (nNew) parts.push(el("span", null, "새 집 ", el("b", { text: String(nNew) })));
