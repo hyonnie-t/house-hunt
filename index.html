@@ -178,13 +178,15 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
 .kp span { display: block; font-size: .72rem; color: var(--sub); }
 .kp strong { display: block; font-family: var(--f-num); font-weight: 600; font-size: .92rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .kp .big strong { font-size: 1.08rem; color: var(--accent); }
+.kp .dep strong { white-space: normal; } /* «2억 3,800»은 폰에서 두 줄로(잘리지 않게, 2026-11-17) */
 .card .sub { font-size: .8rem; color: var(--sub); margin-bottom: var(--space-2); }
-.card .last-cmt { margin-top: var(--space-2); padding: var(--space-1) var(--space-2); border-left: 3px solid var(--accent); background: var(--bg); border-radius: 0 6px 6px 0; font-size: .82rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.card .last-cmt b { color: var(--accent); }
+.card .last-cmt, td.who .last-cmt { margin-top: var(--space-2); padding: var(--space-1) var(--space-2); border-left: 3px solid var(--accent); background: var(--bg); border-radius: 0 6px 6px 0; font-size: .82rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card .last-cmt b, td.who .last-cmt b { color: var(--accent); }
 /* 의견 태그(2026-11-13): 의견 글에서 키워드로 뽑은 이름표. good=초록, warn=주황 */
 .f.tg-good { background: var(--ok-soft); color: var(--ok); font-weight: 600; }
 .f.tg-warn { background: var(--warn-soft); color: var(--warn); font-weight: 600; }
-.card .last-cmt { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; font-size: .88rem; }
+td.who .last-cmt { max-width: 360px; }
+.card .last-cmt, td.who .last-cmt { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; font-size: .88rem; }
 .condtoggle { display: none; }
 .lg-only { display: inline; }
 #gateSheet { background: var(--bg); align-items: center; justify-content: center; }
@@ -608,6 +610,16 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
   const n = (v) => { if (v === "" || v == null) return null; const x = Number(String(v).replace(/[, ]/g, "")); return Number.isFinite(x) ? x : null; };
   const fmt = (v, d) => v == null ? "–" : Number(v).toLocaleString("ko-KR", { maximumFractionDigits: d == null ? 0 : d });
   const py = (m2) => m2 == null ? null : m2 / 3.3058;
+  // 면적은 평을 앞에, ㎡는 괄호로(2026-11-17, 효니 «평을 앞에 적고 m2를 괄호로»)
+  const areaTxt = (m2, d) => m2 == null ? "–" : fmt(py(m2), 1) + "평 (" + fmt(m2, d == null ? 1 : d) + "㎡)";
+  // 보증금처럼 큰 돈(만 원 단위)은 «1억 2천»처럼(2026-11-17, 효니 «보증금은 1억 2천 이런 식으로»). 천 단위로 안 떨어지면 «2억 3,800»
+  const won = (v) => {
+    if (v == null || isNaN(v)) return "–";
+    v = Math.round(Number(v)); if (v <= 0) return "0";
+    const eok = Math.floor(v / 10000), rest = v % 10000;
+    const r = rest === 0 ? "" : rest % 1000 === 0 ? rest / 1000 + "천" : rest.toLocaleString("ko-KR");
+    return eok ? eok + "억" + (r ? " " + r : "") : r;
+  };
   const safeUrl = (u) => { try { const x = new URL(u); return (x.protocol === "https:" || x.protocol === "http:") ? x.href : null; } catch (e) { return null; } };
   function toast(msg) { const t = $("toast"); t.textContent = msg; t.hidden = false; clearTimeout(toast._t); toast._t = setTimeout(() => { t.hidden = true; }, 2600); }
 
@@ -767,8 +779,11 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
         (it.station || "") + (n(it.walkMin) != null ? " 도보 " + n(it.walkMin) + "분" : ""),
         it.agent ? el("span", { class: "muted", text: " · " + it.agent }) : null,
         distText(it) ? el("span", { class: "dist", text: " · " + distText(it) }) : null),
-      cmtTags(it.id).length ? el("div", { class: "flags", style: "margin-top:var(--space-1)" }, ...tagEls(it.id)) : null);
+      cmtTags(it.id).length ? el("div", { class: "flags", style: "margin-top:var(--space-1)" }, ...tagEls(it.id)) : null,
+      lastCmtEl(it.id));
   }
+  // 마지막 의견 한 줄(카드·표 같이 씀)
+  function lastCmtEl(id) { const lc = lastCmt(id); return lc ? el("div", { class: "last-cmt" }, el("b", { text: (lc.who || "?") + " " }), lc.text || "") : null; }
   function moneyMonthly(d) { return d.rent || d.mgmt ? fmt(d.rent, 1) + " + " + fmt(d.mgmt, 1) : (d.dep == null ? "–" : "0"); }
   function dateLine(it) {
     const parts = [];
@@ -780,17 +795,17 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
   function render() {
     const c = S.cond;
     const chips = $("condChips"); chips.replaceChildren(
-      el("span", { class: "chip" }, "전용 ", el("b", { class: "num", text: fmt(c.minArea) + "㎡" }), "↑"),
+      el("span", { class: "chip" }, "전용 ", el("b", { class: "num", text: areaTxt(c.minArea, 0) }), "↑"),
       el("span", { class: "chip" }, "방 ", el("b", { class: "num", text: fmt(c.minRooms) }), "개↑"),
-      el("span", { class: "chip" }, "보증금 ", el("b", { class: "num", text: fmt(c.maxDeposit) }), " 이하"),
+      el("span", { class: "chip" }, "보증금 ", el("b", { class: "num", text: won(c.maxDeposit) }), " 이하"),
       el("span", { class: "chip" }, "월세+관리비 ", el("b", { class: "num", text: fmt(c.monthlyTarget) }), " 내외"),
-      el("span", { class: "chip" }, "자기 돈 ", el("b", { class: "num", text: fmt(c.selfFunds) })),
+      el("span", { class: "chip" }, "자기 돈 ", el("b", { class: "num", text: won(c.selfFunds) })),
       el("span", { class: "chip" }, "금리 ", el("b", { class: "num", text: fmt(c.rate, 2) + "%" })),
       el("span", { class: "chip" }, "만기 ", el("b", { class: "num", text: c.moveBy })),
       el("span", { class: "chip" }, "★ ", c.near));
     // 폰: 조건은 한 줄 요약으로 접어 두고 눌러서 펼친다
     const open = $("topBar").classList.contains("cond-open");
-    $("btnCondShow").textContent = (open ? "▴ " : "▾ ") + "조건 · " + fmt(c.minArea) + "㎡↑ · 방 " + fmt(c.minRooms) + "↑ · 보증금 " + fmt(c.maxDeposit) + "↓ · 월 " + fmt(c.monthlyTarget);
+    $("btnCondShow").textContent = (open ? "▴ " : "▾ ") + "조건 · " + fmt(py(c.minArea), 0) + "평↑ · 방 " + fmt(c.minRooms) + "↑ · 보증금 " + won(c.maxDeposit) + "↓ · 월 " + fmt(c.monthlyTarget);
     renderNews();
     const list = visibleItems();
     fillAgentList();
@@ -806,11 +821,11 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
       const tr = el("tr", { class: it.status === "탈락" ? "dead" : "", style: "animation-delay:" + Math.min(i, 12) * 0.04 + "s" },
         el("td", null, cb),
         el("td", { class: "who" }, nameEls(it, d)),
-        el("td", { class: "r num" }, d.area == null ? "–" : fmt(d.area, 1) + "㎡", el("div", { class: "small muted", text: d.area == null ? "" : fmt(py(d.area), 1) + "평" })),
+        el("td", { class: "r num" }, d.area == null ? "–" : fmt(py(d.area), 1) + "평", el("div", { class: "small muted", text: d.area == null ? "" : "(" + fmt(d.area, 1) + "㎡)" })),
         el("td", { class: "r num", text: d.rooms == null ? "–" : fmt(d.rooms) }),
-        el("td", { class: "r num", text: fmt(d.dep) }),
+        el("td", { class: "r num", text: won(d.dep) }),
         el("td", { class: "r num", text: moneyMonthly(d) }),
-        el("td", { class: "r num", title: d.monthly == null ? "" : "이자 " + fmt(d.interest, 1) + " (대출 " + fmt(d.loan) + ")" }, el("b", { text: d.monthly == null ? "–" : fmt(d.monthly, 0) })),
+        el("td", { class: "r num", title: d.monthly == null ? "" : "이자 " + fmt(d.interest, 1) + " (대출 " + won(d.loan) + ")" }, el("b", { text: d.monthly == null ? "–" : fmt(d.monthly, 0) })),
         el("td", { class: "when" }, it.parking || "미확인", n(it.parkingFee) ? el("div", { class: "small muted", text: "월 " + fmt(n(it.parkingFee), 1) }) : null),
         el("td", { class: "small when" }, ...dateLine(it).split(" · ").flatMap((s, k) => k ? [el("br"), s] : [s])),
         el("td", { class: "flagcell" }, flagEls(d)),
@@ -822,7 +837,7 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
       cb2.addEventListener("click", (e) => e.stopPropagation());
       cb2.addEventListener("change", () => { if (cb2.checked) S.sel.add(it.id); else S.sel.delete(it.id); render(); });
       // 폰 카드(2026-11-12 다시 정리): 이름 + 한 줄 위치 → 숫자 세 칸 → 한 줄 보조 → 상태와 «걸리는 점»만 → 최근 의견
-      const dl = dateLine(it), lc = lastCmt(it.id), nk = newKind(it), nc = newCmts(it.id).length;
+      const dl = dateLine(it), nk = newKind(it), nc = newCmts(it.id).length;
       const meta = [(it.kind || "매물") + " · " + (it.deal || "–"), (it.station || "") + (n(it.walkMin) != null ? " 도보 " + n(it.walkMin) + "분" : ""), it.agent || ""].filter((s) => s.trim());
       const probs = d.flags.filter((f) => f[0] !== "ok");
       const card = el("article", { class: "card" + (nk === "new" ? " is-new" : ""), style: "animation-delay:" + Math.min(i, 12) * 0.04 + "s" },
@@ -834,10 +849,10 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
             distText(it) ? el("div", { class: "meta dist" + (distText(it) === "위치 미확인" ? " unk" : "") }, pinSvg(), distText(it)) : null),
           el("label", { class: "cmpchk", title: "나란히 보기" }, cb2, el("span", { text: "비교" }))),
         el("div", { class: "kp" },
-          el("div", null, el("span", { text: "전용·방" }), el("strong", { text: (d.area == null ? "–" : fmt(d.area, 1) + "㎡") + "·방" + (d.rooms == null ? "–" : d.rooms) })),
-          el("div", null, el("span", { text: "보증금" }), el("strong", { text: fmt(d.dep) })),
+          el("div", null, el("span", { text: "전용·방" }), el("strong", { text: (d.area == null ? "–" : fmt(py(d.area), 1) + "평") + "·방" + (d.rooms == null ? "–" : d.rooms) }), d.area == null ? null : el("span", { class: "m2", text: "(" + fmt(d.area, 1) + "㎡)" })),
+          el("div", { class: "dep" }, el("span", { text: "보증금" }), el("strong", { text: won(d.dep) })),
           el("div", { class: "big", title: d.monthly == null ? "" : "이자 " + fmt(d.interest, 1) + " 포함" }, el("span", { text: "월 부담" }), el("strong", { text: d.monthly == null ? "–" : fmt(d.monthly, 0) }))),
-        el("div", { class: "sub" }, [d.rent ? "월세 " + fmt(d.rent, 1) : "", it.mgmt !== "" && it.mgmt != null ? "관리비 " + fmt(d.mgmt, 1) : "", d.area == null ? "" : fmt(py(d.area), 1) + "평", dl !== "–" ? dl : ""].filter(Boolean).join(" · ")),
+        el("div", { class: "sub" }, [d.rent ? "월세 " + fmt(d.rent, 1) : "", it.mgmt !== "" && it.mgmt != null ? "관리비 " + fmt(d.mgmt, 1) : "", dl !== "–" ? dl : ""].filter(Boolean).join(" · ")),
         el("div", { class: "flags" },
           el("span", { class: "st st-" + (it.status || "후보"), text: it.status || "후보" }),
           nk === "new" ? el("span", { class: "f new", text: "새 집" }) : nk === "upd" ? el("span", { class: "f upd", text: "고침" }) : null,
@@ -845,7 +860,7 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
           it.fill === "대기" ? el("span", { class: "f unk", text: "클로드 정리 대기" }) : null,
           ...tagEls(it.id),
           ...(probs.length ? probs.map((f) => el("span", { class: "f " + f[0], text: f[1] })) : [el("span", { class: "f ok", text: "조건 다 맞음" })])),
-        lc ? el("div", { class: "last-cmt" }, el("b", { text: (lc.who || "?") + " " }), lc.text || "") : null);
+        lastCmtEl(it.id));
       card.addEventListener("click", () => openDetail(it.id));
       cards.append(card);
     });
@@ -922,7 +937,7 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
       box.append(el("div", { class: "pp" },
         el("div", { class: "name" }, ...rankEls(it), dispName(it)),
         el("div", { class: "small muted", text: [(it.kind || "매물") + " · " + (it.deal || "–"), it.status || "후보", distText(it)].filter(Boolean).join(" · ") }),
-        el("div", { class: "small num", text: "보증금 " + fmt(d.dep) + " · 월 부담 " + (d.monthly == null ? "–" : fmt(d.monthly, 0)) + " · " + (d.area == null ? "–" : fmt(d.area, 1) + "㎡") }),
+        el("div", { class: "small num", text: "보증금 " + won(d.dep) + " · 월 부담 " + (d.monthly == null ? "–" : fmt(d.monthly, 0)) + " · " + areaTxt(d.area) }),
         el("button", { class: "btn", type: "button", text: "자세히 보기", onclick: () => openDetail(it.id) })));
     });
     return box;
@@ -983,10 +998,10 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
     $("cmpCount").textContent = picked.length + "곳";
     const ds = picked.map((it) => ({ it, d: derive(it) }));
     const metrics = [
-      ["전용면적", (x) => x.d.area, "max", (v) => fmt(v, 1) + "㎡ (" + fmt(py(v), 1) + "평)"],
+      ["전용면적", (x) => x.d.area, "max", (v) => areaTxt(v)],
       ["방", (x) => x.d.rooms, "max", (v) => fmt(v)],
-      ["보증금", (x) => x.d.dep, "min", (v) => fmt(v)],
-      ["필요한 대출", (x) => x.d.loan, "min", (v) => fmt(v)],
+      ["보증금", (x) => x.d.dep, "min", (v) => won(v)],
+      ["필요한 대출", (x) => x.d.loan, "min", (v) => won(v)],
       ["월세+관리비", (x) => x.d.dep == null ? null : x.d.rent + x.d.mgmt, "min", (v) => fmt(v, 1)],
       ["월 부담(이자 포함)", (x) => x.d.monthly, "min", (v) => fmt(v, 0)],
       ["역까지", (x) => n(x.it.walkMin), "min", (v) => fmt(v) + "분"],
@@ -1071,8 +1086,8 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
       el("div", { text: "종류" }), el("div", { text: (it.kind || "매물") + " · " + (it.deal || "–") + (it.source === "클로드" ? " · 클로드 검색" : "") + (it.fill === "대기" ? " · 클로드 정리 대기(매일 아침)" : it.fill === "완료" ? " · 클로드가 빈 칸 채움" : it.fill === "못함" ? " · 클로드가 링크를 못 열었어요(메모 참고)" : "") }),
       el("div", { text: "위치" }), el("div", { text: (it.station || "–") + (n(it.walkMin) != null ? " · 도보 " + n(it.walkMin) + "분" : "") + (it.address ? " · " + it.address : "") }),
       ...(distText(it) || mapLinks(it).length ? [el("div", { text: "지도" }), el("div", { class: "maplinks" }, distText(it) ? el("span", { text: distText(it) }) : null, ...mapLinks(it))] : []),
-      el("div", { text: "전용·방" }), el("div", { class: "num", text: (d.area == null ? "–" : fmt(d.area, 2) + "㎡ (" + fmt(py(d.area), 1) + "평)") + " · 방 " + (d.rooms ?? "–") + (it.baths ? " · 욕실 " + it.baths : "") }),
-      el("div", { text: "보증금" }), el("div", { class: "num", text: fmt(d.dep) + (d.loan ? " (대출 필요 " + fmt(d.loan) + ")" : "") }),
+      el("div", { text: "전용·방" }), el("div", { class: "num", text: areaTxt(d.area, 2) + " · 방 " + (d.rooms ?? "–") + (it.baths ? " · 욕실 " + it.baths : "") }),
+      el("div", { text: "보증금" }), el("div", { class: "num", text: won(d.dep) + (d.loan ? " (대출 필요 " + won(d.loan) + ")" : "") }),
       el("div", { text: "월세·관리비" }), el("div", { class: "num", text: fmt(d.rent, 1) + " · " + fmt(d.mgmt, 1) + (d.pfee ? " · 주차 " + fmt(d.pfee, 1) : "") }),
       el("div", { text: "월 부담" }), el("div", { class: "num" }, el("b", { text: d.monthly == null ? "–" : fmt(d.monthly, 0) }), !d.interest ? "" : " (이자 " + fmt(d.interest, 1) + " 포함)"),
       el("div", { text: "주차" }), el("div", { text: it.parking || "미확인" }),
