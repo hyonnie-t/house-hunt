@@ -620,21 +620,22 @@ input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
     return { dep, rent, mgmt, pfee, loan, interest, monthly, area, rooms, flags, isNear, score, hardFail };
   }
 
-  // 상태(탈락 숨김)·종류 필터만 거친 집. 새 소식 줄도 이 범위로 세어, 숨겨진 탈락 집을 «새 집»으로 세지 않는다(2026-11-17)
+  // «새 것만 보기»를 뺀 필터(상태·종류·우선순위·의견 태그)를 모두 거친 집.
+  // 새 소식 줄도 이 범위로 세어, 숫자와 «새 것만 보기» 목록이 늘 같게 한다(2026-11-17, 탈락 숨김 → 모든 필터로 넓힘)
   function baseItems() {
     let list = S.items;
     if (S.status === "live") list = list.filter((it) => it.status !== "탈락");
     else if (S.status === "탈락") list = list.filter((it) => it.status === "탈락");
     if (S.kind !== "all") list = list.filter((it) => (it.kind || "매물") === S.kind);
+    if (S.pri === "none") list = list.filter((it) => !it.priority);
+    else if (S.pri !== "all") list = list.filter((it) => it.priority === S.pri);
+    if (S.tag === "none") list = list.filter((it) => !cmtCount(it.id));
+    else if (S.tag !== "all") list = list.filter((it) => cmtTags(it.id).some((t) => t.key === S.tag));
     return list;
   }
   function visibleItems() {
     let list = baseItems().map((it) => ({ it, d: derive(it) }));
     if (NEWS.only) list = list.filter((x) => newKind(x.it) || newCmts(x.it.id).length);
-    if (S.pri === "none") list = list.filter((x) => !x.it.priority);
-    else if (S.pri !== "all") list = list.filter((x) => x.it.priority === S.pri);
-    if (S.tag === "none") list = list.filter((x) => !cmtCount(x.it.id));
-    else if (S.tag !== "all") list = list.filter((x) => cmtTags(x.it.id).some((t) => t.key === S.tag));
     const big = 1e12;
     const key = {
       score: (x) => -(x.d.score - (x.d.hardFail ? 10 : 0)),
