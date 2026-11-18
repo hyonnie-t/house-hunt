@@ -391,7 +391,9 @@ function inFolder_(file) {
 function videoStart_(d) {
   const size = Number(d.size);
   if (!(size > 0) || size > VIDEO_MAX) return { ok: false, error: '동영상은 2GB까지 올릴 수 있어요' };
-  const mime = /^video\/[\w.+-]+$/.test(String(d.mime || '')) ? String(d.mime) : 'video/mp4';
+  // 2026-11-18 사진·PDF도 같은 길로(효니 «사진이 안 올라가는디»): 그림·PDF는 그 형식 그대로, 나머지는 영상으로 본다
+  const raw = String(d.mime || '');
+  const mime = /^(video|image)\/[\w.+-]+$/.test(raw) || raw === 'application/pdf' ? raw : 'video/mp4';
   const item = String(d.itemName || '').replace(/[\\/:*?"<>|]/g, ' ').slice(0, 40).trim();
   const name = (Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd') + ' ' + item + ' ' + String(d.name || 'video').slice(-60)).replace(/\s+/g, ' ').trim();
   const res = UrlFetchApp.fetch(UPLOAD_PREFIX + 'uploadType=resumable&fields=id,name,size', {
