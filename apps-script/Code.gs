@@ -5,12 +5,13 @@
  * 지우기는 deleted=TRUE 표시만 한다(줄은 남는다). 정기 검색은 deleted·탈락 집을 다시 넣지 않는다.
  * 정기 검색(Claude)은 이 웹 앱이 아니라 구글 시트를 직접 읽고 써서 비밀번호가 필요 없다.
  */
-const VERSION = 5; // 2026-11-13 위치(geo·ref, 카카오 로컬)
+const VERSION = 6; // 2026-11-18 동영상(구글 드라이브 «집 찾기 영상» 폴더)
 // 새 칸은 맨 뒤에만 더한다(이미 있는 줄의 칸 위치가 밀리지 않게)
 const COLS = ['id', 'name', 'kind', 'deal', 'station', 'walkMin', 'address', 'area', 'rooms', 'baths', 'deposit', 'rent', 'mgmt',
   'parking', 'parkingFee', 'moveIn', 'deadline', 'status', 'link', 'memo', 'images', 'source', 'createdAt', 'updatedAt', 'deleted',
   'alias', 'agent', 'rank', 'priority', // 2026-11-09 별칭·중개사 이름·내 순위(숫자)·우선순위(최우선/높음/보통/낮음)
-  'fill']; // 2026-11-12 «대기»면 정기 검색(Claude)이 링크를 열어 빈 칸만 채우고 «완료»로 바꾼다
+  'fill', // 2026-11-12 «대기»면 정기 검색(Claude)이 링크를 열어 빈 칸만 채우고 «완료»로 바꾼다
+  'videos']; // 2026-11-18 직접 찍은 동영상 [{id(드라이브 파일), name, size, at}] JSON. 정기 검색은 비워 둔다
 const NUM = ['walkMin', 'area', 'rooms', 'baths', 'deposit', 'rent', 'mgmt', 'parkingFee', 'rank'];
 
 function doGet(e) {
@@ -33,6 +34,11 @@ function doPost(e) {
       case 'saveAgent': return out_(withLock_(() => saveAgent_(d.agent || {})));
       case 'removeAgent': return out_(withLock_(() => removeAgent_(String(d.id || ''))));
       case 'uncomment': return out_(withLock_(() => uncomment_(String(d.id || ''))));
+      case 'addrLookup': return out_(addrLookup_(String(d.address || '').slice(0, 200)));
+      case 'videoStart': return out_(videoStart_(d));
+      case 'videoChunk': return out_(videoChunk_(d));
+      case 'videoDone': return out_(videoDone_(String(d.id || '')));
+      case 'videoTrash': return out_(videoTrash_(String(d.id || '')));
     }
     return out_({ ok: false, error: '모르는 요청: ' + d.action });
   } catch (err) {
@@ -88,6 +94,7 @@ function rowToItem_(row) {
     if (v === '' || v === null || v === undefined) return;
     if (NUM.indexOf(c) >= 0) { const n = Number(v); if (isFinite(n)) o[c] = n; return; }
     if (c === 'deleted') { o[c] = (v === true || String(v).toUpperCase() === 'TRUE'); return; }
+    if (c === 'videos') { try { o[c] = JSON.parse(v); } catch (e) { o[c] = []; } return; }
     if (c === 'images') { try { o[c] = JSON.parse(v); } catch (e) { o[c] = String(v).split(/\s+/).filter(String); } return; }
     if (Object.prototype.toString.call(v) === '[object Date]') v = Utilities.formatDate(v, 'Asia/Seoul', 'yyyy-MM-dd');
     o[c] = String(v);
@@ -100,6 +107,7 @@ function itemToRow_(it) {
     const v = it[c];
     if (v === undefined || v === null) return '';
     if (c === 'images') return Array.isArray(v) ? JSON.stringify(v) : String(v);
+    if (c === 'videos') return Array.isArray(v) ? (v.length ? JSON.stringify(v) : '') : String(v);
     if (c === 'deleted') return v ? 'TRUE' : '';
     return v;
   });
@@ -179,6 +187,29 @@ function geo_(items) {
   // 키가 있는데 역 검색만 안 될 때는 신대방역(2호선) 대략 좌표로 대신한다
   const ref = r0 && r0.lat ? { name: '신대방역', lat: r0.lat, lng: r0.lng } : (error ? null : { name: '신대방역', lat: 37.48749, lng: 126.91311 });
   return { geo: geo, ref: ref, error: error };
+}
+
+// 주소만 넣었을 때(2026-11-18, 효니 «주소만 넣을 수 있어? 네가 찾아주면 좋겠는데»): 카카오 로컬로
+// 정식 주소·건물 이름과 가장 가까운 지하철역(직선 거리)을 찾아 준다. 보내는 것은 주소 글자뿐, 결과는 저장하지 않는다.
+function addrLookup_(addr) {
+  const key = PropertiesService.getScriptProperties().getProperty('KAKAO_REST_KEY');
+  if (!key) return { ok: false, error: '카카오 키가 없어요' };
+  const q = geoQuery_(addr);
+  if (!q) return { ok: false, error: '주소를 적어 주세요' };
+  const head = { headers: { Authorization: 'KakaoAK ' + key }, muteHttpExceptions: true };
+  const r = UrlFetchApp.fetch('https://dapi.kakao.com/v2/local/search/address.json?size=3&query=' + encodeURIComponent(q), head);
+  if (r.getResponseCode() !== 200) return { ok: false, error: '카카오 오류(' + r.getResponseCode() + ')' };
+  const doc = (JSON.parse(r.getContentText()).documents || [])[0];
+  if (!doc) return { ok: true, found: false };
+  const road = doc.road_address || {}, jibun = doc.address || {};
+  const out = { ok: true, found: true, rough: doc.address_type === 'REGION' || doc.address_type === 'ROAD',
+    road: road.address_name || '', jibun: jibun.address_name || '', building: road.building_name || '', dong: jibun.region_3depth_name || road.region_3depth_name || '' };
+  const s = UrlFetchApp.fetch('https://dapi.kakao.com/v2/local/search/category.json?category_group_code=SW8&sort=distance&radius=3000&size=3&x=' + doc.x + '&y=' + doc.y, head);
+  if (s.getResponseCode() === 200) {
+    const st = (JSON.parse(s.getContentText()).documents || [])[0];
+    if (st) { out.station = String(st.place_name).replace(/\s.*$/, ''); out.stationM = Number(st.distance); }
+  }
+  return out;
 }
 
 // 처음 한 번: 편집기에서 이 함수를 골라 «실행» → 권한 허용(외부 서비스 호출). 웹 앱이 카카오를 부르려면 소유자 허락이 필요하다.
@@ -301,6 +332,7 @@ function save_(item) {
     const old = rowToItem_(sh.getRange(row, 1, 1, COLS.length).getValues()[0]);
     item.createdAt = old.createdAt || item.createdAt || now;
     item.source = old.source || item.source;
+    if (item.videos === undefined && old.videos) item.videos = old.videos; // 동영상 칸을 모르는 옛 화면이 저장해도 지우지 않는다
     sh.getRange(row, 1, 1, COLS.length).setValues([itemToRow_(item)]);
   }
   return { ok: true, updatedAt: now };
@@ -317,5 +349,95 @@ function remove_(id) {
 
 function saveCond_(cond) {
   condSheet_().getRange(1, 1).setValue(JSON.stringify(cond));
+  return { ok: true };
+}
+
+/* ---------- 동영상(2026-11-18): 직접 찍은 영상을 효니 구글 드라이브 «집 찾기 영상» 폴더에 ----------
+ * 큰 파일은 드라이브 «이어 올리기» 세션으로 조각조각 올린다. 세션은 이 스크립트가 효니 권한으로 열고(videoStart),
+ * 브라우저는 받은 주소로 조각을 바로 보낸다. 바로 보내기가 막히면(CORS) 조각을 이 스크립트에 보내 대신 넘긴다(videoChunk).
+ * 다 올라가면 «링크가 있는 사람 보기»로 바꿔 앱 안에서 재생한다(남자친구는 구글 로그인 없이 봄). 시트에는 파일 id만 적는다.
+ * 지우기는 휴지통으로(30일 안에 드라이브에서 되살릴 수 있음). 이 폴더 밖 파일은 건드리지 않는다.
+ * 권한: 처음 한 번 효니가 편집기에서 authorizeDrive를 실행해 드라이브 권한을 허락해야 한다.
+ */
+const VIDEO_FOLDER = '집 찾기 영상';
+const APP_ORIGIN = 'https://hyonnie-t.github.io';
+const VIDEO_MAX = 2 * 1024 * 1024 * 1024; // 2GB
+const UPLOAD_PREFIX = 'https://www.googleapis.com/upload/drive/v3/files?';
+
+// 편집기에서 한 번 실행해 드라이브 권한을 허락하는 함수(효니가 «실행 → 허용»)
+function authorizeDrive() { const f = videoFolder_(); Logger.log('폴더 준비됨: ' + f.getName()); }
+
+function videoFolder_() {
+  const props = PropertiesService.getScriptProperties();
+  const id = props.getProperty('VIDEO_FOLDER_ID');
+  if (id) { try { const f = DriveApp.getFolderById(id); if (!f.isTrashed()) return f; } catch (e) { /* 지워졌으면 새로 */ } }
+  const f = DriveApp.createFolder(VIDEO_FOLDER);
+  props.setProperty('VIDEO_FOLDER_ID', f.getId());
+  return f;
+}
+
+function inFolder_(file) {
+  const fid = videoFolder_().getId();
+  const ps = file.getParents();
+  while (ps.hasNext()) if (ps.next().getId() === fid) return true;
+  return false;
+}
+
+function videoStart_(d) {
+  const size = Number(d.size);
+  if (!(size > 0) || size > VIDEO_MAX) return { ok: false, error: '동영상은 2GB까지 올릴 수 있어요' };
+  const mime = /^video\/[\w.+-]+$/.test(String(d.mime || '')) ? String(d.mime) : 'video/mp4';
+  const item = String(d.itemName || '').replace(/[\\/:*?"<>|]/g, ' ').slice(0, 40).trim();
+  const name = (Utilities.formatDate(new Date(), 'Asia/Seoul', 'yyyy-MM-dd') + ' ' + item + ' ' + String(d.name || 'video').slice(-60)).replace(/\s+/g, ' ').trim();
+  const res = UrlFetchApp.fetch(UPLOAD_PREFIX + 'uploadType=resumable&fields=id,name,size', {
+    method: 'post', contentType: 'application/json; charset=UTF-8', muteHttpExceptions: true,
+    headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken(), 'X-Upload-Content-Type': mime, 'X-Upload-Content-Length': String(size), Origin: APP_ORIGIN },
+    payload: JSON.stringify({ name: name, mimeType: mime, parents: [videoFolder_().getId()] })
+  });
+  const h = res.getAllHeaders();
+  const url = h.Location || h.location;
+  if (res.getResponseCode() !== 200 || !url) return { ok: false, error: '드라이브가 받지 않았어요(' + res.getResponseCode() + ')' };
+  return { ok: true, url: url };
+}
+
+// 바로 보내기가 막혔을 때: 조각(base64)을 받아 드라이브에 대신 넘긴다
+function videoChunk_(d) {
+  const url = String(d.url || '');
+  if (url.indexOf(UPLOAD_PREFIX) !== 0 || url.indexOf('upload_id=') < 0) return { ok: false, error: '올리기 주소가 이상해요' };
+  const start = Number(d.start), total = Number(d.total);
+  if (d.status) { // 어디까지 받았는지만 묻기(조각 없이 «bytes */전체»)
+    const q = UrlFetchApp.fetch(url, { method: 'put', muteHttpExceptions: true, headers: { 'Content-Range': 'bytes */' + total } });
+    const qc = q.getResponseCode();
+    if (qc === 308) { const qh = q.getAllHeaders(); const qr = qh.Range || qh.range || ''; return { ok: true, done: false, next: qr ? Number(String(qr).split('-')[1]) + 1 : 0 }; }
+    if (qc === 200 || qc === 201) return { ok: true, done: true, id: JSON.parse(q.getContentText()).id };
+    return { ok: false, error: '드라이브 상태 확인 실패(' + qc + ')' };
+  }
+  const bytes = Utilities.base64Decode(String(d.data || ''));
+  if (!(total > 0) || !(start >= 0) || !bytes.length || start + bytes.length > total) return { ok: false, error: '조각 범위가 이상해요' };
+  const res = UrlFetchApp.fetch(url, {
+    method: 'put', muteHttpExceptions: true, contentType: 'application/octet-stream', payload: bytes,
+    headers: { 'Content-Range': 'bytes ' + start + '-' + (start + bytes.length - 1) + '/' + total }
+  });
+  const code = res.getResponseCode();
+  if (code === 308) { const hh = res.getAllHeaders(); const r = hh.Range || hh.range || ''; return { ok: true, done: false, next: r ? Number(String(r).split('-')[1]) + 1 : 0 }; }
+  if (code === 200 || code === 201) { const j = JSON.parse(res.getContentText()); return { ok: true, done: true, id: j.id }; }
+  return { ok: false, error: '드라이브 조각 실패(' + code + ')' };
+}
+
+// 다 올라간 파일: 폴더 안인지 보고 «링크가 있는 사람 보기»로 바꾼다
+function videoDone_(id) {
+  if (!/^[\w-]{10,}$/.test(id)) return { ok: false, error: '파일 id가 이상해요' };
+  const f = DriveApp.getFileById(id);
+  if (!inFolder_(f)) return { ok: false, error: '집 찾기 영상 폴더의 파일이 아니에요' };
+  let shared = true;
+  try { f.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW); } catch (e) { shared = false; }
+  return { ok: true, id: id, name: f.getName(), size: f.getSize(), shared: shared };
+}
+
+function videoTrash_(id) {
+  if (!/^[\w-]{10,}$/.test(id)) return { ok: false, error: '파일 id가 이상해요' };
+  let f; try { f = DriveApp.getFileById(id); } catch (e) { return { ok: true, gone: true }; }
+  if (!inFolder_(f)) return { ok: false, error: '집 찾기 영상 폴더의 파일이 아니에요' };
+  f.setTrashed(true);
   return { ok: true };
 }
