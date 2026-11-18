@@ -94,7 +94,7 @@ function rowToItem_(row) {
     if (v === '' || v === null || v === undefined) return;
     if (NUM.indexOf(c) >= 0) { const n = Number(v); if (isFinite(n)) o[c] = n; return; }
     if (c === 'deleted') { o[c] = (v === true || String(v).toUpperCase() === 'TRUE'); return; }
-    if (c === 'videos') { try { o[c] = JSON.parse(v); } catch (e) { o[c] = []; } return; }
+    if (c === 'videos') { let a = []; try { a = JSON.parse(v); } catch (e) { a = []; } o[c] = Array.isArray(a) ? a : []; return; }
     if (c === 'images') { try { o[c] = JSON.parse(v); } catch (e) { o[c] = String(v).split(/\s+/).filter(String); } return; }
     if (Object.prototype.toString.call(v) === '[object Date]') v = Utilities.formatDate(v, 'Asia/Seoul', 'yyyy-MM-dd');
     o[c] = String(v);
@@ -371,9 +371,14 @@ function videoFolder_() {
   const props = PropertiesService.getScriptProperties();
   const id = props.getProperty('VIDEO_FOLDER_ID');
   if (id) { try { const f = DriveApp.getFolderById(id); if (!f.isTrashed()) return f; } catch (e) { /* 지워졌으면 새로 */ } }
-  const f = DriveApp.createFolder(VIDEO_FOLDER);
-  props.setProperty('VIDEO_FOLDER_ID', f.getId());
-  return f;
+  // 처음 두 영상을 동시에 올려도 폴더가 둘 생기지 않게 잠그고 다시 본다(제미나이 검토 2026-11-18)
+  return withLock_(() => {
+    const again = props.getProperty('VIDEO_FOLDER_ID');
+    if (again && again !== id) { try { const g = DriveApp.getFolderById(again); if (!g.isTrashed()) return g; } catch (e) { /* 새로 */ } }
+    const f = DriveApp.createFolder(VIDEO_FOLDER);
+    props.setProperty('VIDEO_FOLDER_ID', f.getId());
+    return f;
+  });
 }
 
 function inFolder_(file) {

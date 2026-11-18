@@ -1365,6 +1365,7 @@ td.who .last-cmt { max-width: 360px; }
         // 누를 때만 드라이브 재생기를 불러온다(상세 창을 열 때마다 영상 여러 개를 받지 않게)
         play.replaceWith(el("iframe", { src: "https://drive.google.com/file/d/" + encodeURIComponent(v.id) + "/preview", allow: "autoplay; fullscreen", allowfullscreen: "", title: v.name || "동영상" }));
       });
+      if (v.shared === false) card.append(el("div", { class: "vfoot", text: "⚠ 드라이브 공유를 못 바꿔서 효니 계정으로 로그인한 기기에서만 재생돼요" }));
       card.append(play, el("div", { class: "vfoot" },
         el("span", { text: [v.at ? String(v.at).slice(0, 10) : "", v.size ? mb(v.size) : ""].filter(Boolean).join(" · ") }),
         el("a", { href: "https://drive.google.com/file/d/" + encodeURIComponent(v.id) + "/view", target: "_blank", rel: "noopener", text: "드라이브에서 열기 ↗" })));
@@ -1420,7 +1421,8 @@ td.who .last-cmt { max-width: 360px; }
       x.setRequestHeader("Content-Range", "bytes " + start + "-" + (end - 1) + "/" + size);
       x.upload.onprogress = (e) => setSent(job, start + e.loaded);
       x.onload = () => {
-        if (x.status === 308) { const rg = x.getResponseHeader("Range"); resolve({ next: rg ? Number(rg.split("-")[1]) + 1 : end }); }
+        // 308: Range를 못 읽으면(CORS가 안 보여 줌) 끝까지 받았다고 짐작하지 않고 백엔드에 물어본다(제미나이 검토 2026-11-18)
+        if (x.status === 308) { const rg = x.getResponseHeader("Range"); if (rg) resolve({ next: Number(rg.split("-")[1]) + 1 }); else proxyStatus(job).then((nx) => resolve(job.fileId ? { fileId: job.fileId } : { next: nx }), reject); }
         else if (x.status === 200 || x.status === 201) { try { resolve({ fileId: JSON.parse(x.responseText).id }); } catch (e) { reject(new Error("드라이브 답을 못 읽음")); } }
         else reject(new Error("드라이브 " + x.status));
       };
@@ -1487,7 +1489,8 @@ td.who .last-cmt { max-width: 360px; }
       put("f_name", r.building ? (r.dong ? r.dong + " " : "") + r.building : "", "이름");
       // 걸어서 분: 직선 거리 × 1.3(길 굽이) ÷ 분당 67m 어림
       put("f_station", r.station || "", "가까운 역");
-      if (r.stationM != null) put("f_walk", Math.max(1, Math.round(r.stationM * 1.3 / 67)), "걸어서 분(어림)");
+      // 역 칸에 다른 동네·역이 적혀 있으면 도보 분은 그 역 것이 아니니 채우지 않는다(검토 2026-11-18)
+      if (r.stationM != null && $("f_station").value.trim() === (r.station || "")) put("f_walk", Math.max(1, Math.round(r.stationM * 1.3 / 67)), "걸어서 분(어림)");
       $("addrMsg").textContent = (got.length ? "채운 칸: " + got.join(", ") + "." : "이미 적힌 칸은 그대로 뒀어요.") + (r.station ? " " + r.station + "까지 직선 " + r.stationM + "m." : "") + (r.rough ? " ⚠ 동까지만 맞았어요(번지를 더 적으면 정확해져요)." : "") + " 면적·보증금이 비면 내일 아침 클로드가 이 주소로 찾아 채워요.";
     } catch (e) { $("addrMsg").textContent = "찾지 못했어요: " + (e && e.message || "오류"); }
     finally { b.disabled = false; b.textContent = "주소로 찾기"; }
@@ -1558,7 +1561,9 @@ td.who .last-cmt { max-width: 360px; }
       // 네이버는 클로드가 열 수 없어 대기로 두지 않는다. 공고는 면적이 범위라 대상에서 뺀다
       // 2026-11-18: 링크가 없어도 주소가 있으면 대기(클로드가 주소로 같은 건물 매물·건물 정보를 찾음)
       const missing = body.kind !== "공고" && ((body.link && siteOf(body.link).site !== "네이버") || (!body.link && body.address)) && (body.area == null || body.rooms == null || body.deposit == null || (body.deal !== "전세" && body.rent == null));
-      body.fill = missing ? "대기" : (old && old.fill === "완료" ? "완료" : "");
+      // 클로드가 «못함»으로 둔 집은 링크·주소가 그대로면 다시 대기로 돌리지 않는다(매일 같은 집을 또 찾지 않게)
+      const sameSrc = old && old.fill === "못함" && (old.link || "") === (body.link || "") && (old.address || "") === (body.address || "");
+      body.fill = missing ? (sameSrc ? "못함" : "대기") : (old && old.fill === "완료" ? "완료" : "");
       const qid = !old && S.quickId && !S.items.some((x) => x.id === S.quickId) ? S.quickId : null;
       const ref = S.editing ? S.db.doc("listings/" + S.editing) : qid ? S.db.doc("listings/" + qid) : S.db.collection("listings").doc();
       await ref.set(body);
