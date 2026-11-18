@@ -434,6 +434,7 @@ td.who .last-cmt { max-width: 360px; }
       <label class="small muted" for="sortSel">정렬</label>
       <select id="sortSel">
         <option value="score">조건 맞는 순</option>
+        <option value="pri">우선순위 순(최우선→보통)</option>
         <option value="rank">내 순위 순</option>
         <option value="monthly">월 부담 적은 순</option>
         <option value="area">넓은 순</option>
@@ -747,6 +748,8 @@ td.who .last-cmt { max-width: 360px; }
     const key = {
       score: (x) => -(x.d.score - (x.d.hardFail ? 10 : 0)),
       rank: (x) => (n(x.it.rank) == null ? big : n(x.it.rank)) * 10 + (PRI_ORDER[x.it.priority] == null ? 5 : PRI_ORDER[x.it.priority]),
+      // 우선순위 순: 최우선→높음→보통→낮음→미정, 같은 급 안에서는 내 순위(1위 먼저) → 조건 맞는 순
+      pri: (x) => (PRI_ORDER[x.it.priority] == null ? 5 : PRI_ORDER[x.it.priority]) * 1e6 + Math.min(n(x.it.rank) == null ? 9999 : n(x.it.rank), 9999) * 100 - Math.max(-99, Math.min(99, x.d.score - (x.d.hardFail ? 10 : 0))),
       monthly: (x) => x.d.monthly == null ? big : x.d.monthly,
       area: (x) => x.d.area == null ? big : -x.d.area,
       deposit: (x) => x.d.dep == null ? big : x.d.dep,
