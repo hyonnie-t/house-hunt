@@ -5,7 +5,10 @@ import sys, json, time, urllib.request, importlib.util
 from pathlib import Path
 from googleapiclient.discovery import build
 
-GS = Path(r"D:\OneDrive - 대영중학교\교사업무\웹앱\history26_backend\tools\gas_sync.py")
+# PC마다 OneDrive 위치가 다르다(학교 D:, 노트북 C:\Users\...) → 있는 쪽을 쓴다
+_GS_CANDS = [Path(r"D:\OneDrive - 대영중학교\교사업무\웹앱\history26_backend\tools\gas_sync.py"),
+             Path.home() / "OneDrive - 대영중학교" / "교사업무" / "웹앱" / "history26_backend" / "tools" / "gas_sync.py"]
+GS = next((p for p in _GS_CANDS if p.exists()), _GS_CANDS[0])
 spec = importlib.util.spec_from_file_location("gas_sync", GS)
 gs = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(gs)
