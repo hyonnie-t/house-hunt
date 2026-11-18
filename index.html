@@ -647,7 +647,11 @@ td.who .last-cmt { max-width: 360px; }
   const DEFAULT_COND = { minArea: 33, minRooms: 2, selfFunds: 8000, maxDeposit: 33000, monthlyTarget: 100, rate: 2.5, moveBy: "2027-02-21", near: "신대방, 신사동, 보라매, 신림, 대방" };
   const S = { items: [], cond: Object.assign({}, DEFAULT_COND), status: "live", kind: "all", sort: "score", pri: "all", tag: "all", q: "", sel: new Set(), db: null, assets: null, canWrite: true, editing: null, pending: [], keepPhotos: [], keepVideos: [], vUp: [], vRemoved: [], saving: false, loaded: false };
   let EMPTY_HTML = "";
-  const imgSrc = (p) => /^(https?:|plans\/)/.test(p) ? p : "/_blob/" + p;
+  // 사진 주소: 드라이브에 올린 것은 «gd:파일id»(그림)·«gdp:파일id»(PDF)로 저장한다(2026-11-18). 그림은 드라이브 썸네일(긴 쪽 2000px)로 보여 준다
+  const imgSrc = (p) => /^gd:/.test(p) ? "https://drive.google.com/thumbnail?sz=w2000&id=" + encodeURIComponent(p.slice(3))
+    : /^gdp:/.test(p) ? "https://drive.google.com/file/d/" + encodeURIComponent(p.slice(4)) + "/view"
+    : /^(https?:|plans\/)/.test(p) ? p : "/_blob/" + p;
+  const isPdfId = (p) => typeof p === "object" ? /pdf/.test(p.type || "") : /^gdp:/.test(String(p));
   const CM = { list: [], agents: [], who: (() => { try { return localStorage.getItem("hh_who") || ""; } catch (e) { return ""; } })() };
   const $ = (id) => document.getElementById(id);
   const el = (tag, attrs, ...kids) => { const e = document.createElement(tag); if (attrs) for (const k in attrs) { if (k === "class") e.className = attrs[k]; else if (k === "text") e.textContent = attrs[k]; else if (k.startsWith("on")) e.addEventListener(k.slice(2), attrs[k]); else if (attrs[k] !== undefined && attrs[k] !== null) e.setAttribute(k, attrs[k]); } for (const c of kids) if (c != null) e.append(c); return e; };
@@ -1165,7 +1169,7 @@ td.who .last-cmt { max-width: 360px; }
     const photos = Array.isArray(it.photos) ? it.photos : [];
     if (photos.length) {
       const g = el("div", { class: "gallery" });
-      const pics = photos.map((p) => ({ src: imgSrc(typeof p === "string" ? p : p.id), pdf: typeof p === "object" && /pdf/.test(p.type || "") }));
+      const pics = photos.map((p) => ({ src: imgSrc(typeof p === "string" ? p : p.id), pdf: isPdfId(p) }));
       const imgs = pics.filter((x) => !x.pdf);
       pics.forEach((p, i) => { g.append(p.pdf ? el("a", { href: p.src, target: "_blank", rel: "noopener" }, el("div", { class: "thumb" }, el("div", { class: "pdf", text: "PDF 열기" }))) : el("button", { type: "button", class: "ph", "aria-label": "사진 크게 보기", onclick: () => openViewer(imgs, pics.slice(0, i).filter((x) => !x.pdf).length, (it.name || "") + " 사진") }, el("img", { src: p.src, alt: (it.name || "") + " 사진", loading: "lazy" }))); });
       if (imgs.length > 1) g.append(el("div", { class: "more", text: "사진을 누르면 크게 보고 옆으로 넘길 수 있어요" }));
@@ -1467,6 +1471,18 @@ td.who .last-cmt { max-width: 360px; }
   }
   // 입력 창을 저장 없이 닫을 때: 올리던 것은 멈추고, 다 올린 것도 집에 안 붙었으니 휴지통으로
   function discardVideoJobs() { S.vUp.forEach(cancelJob); S.vUp = []; }
+  // 사진·PDF 저장소(2026-11-18, 효니 «사진이 안 올라가는디»): 동영상과 같은 드라이브 폴더·같은 올리기 길을 쓴다.
+  // 옛 아티팩트 저장소(S.assets)와 같은 모양(upload → {id, contentType}, delete(id))이라 입력 창·지우기 코드는 그대로 둔다.
+  const DRIVE_ASSETS = {
+    async upload(f) {
+      const job = { file: f, state: "up", sent: 0, cancel: false };
+      await runVideo(job);
+      if (job.state !== "done") { const e = new Error(job.err || "사진을 올리지 못했어요"); e.code = "사진 올리기 실패"; throw e; }
+      const pdf = f.type === "application/pdf";
+      return { id: (pdf ? "gdp:" : "gd:") + job.rec.id, contentType: f.type || "image/jpeg" };
+    },
+    async delete(pid) { const m = String(pid).match(/^gdp?:(.+)$/); if (m) await call("videoTrash", { id: m[1] }); }
+  };
   $("btnPickVideo").addEventListener("click", () => $("f_videos").click());
   $("f_videos").addEventListener("change", (e) => { addVideos([...e.target.files]); e.target.value = ""; });
   const vdz = $("vDrop");
@@ -1517,12 +1533,12 @@ td.who .last-cmt { max-width: 360px; }
   }
   function drawThumbs() {
     const t = $("thumbs"); t.replaceChildren();
-    S.keepPhotos.forEach((p, i) => { const pid = typeof p === "string" ? p : p.id; const isPdf = typeof p === "object" && /pdf/.test(p.type || ""); t.append(el("div", { class: "thumb" }, isPdf ? el("div", { class: "pdf", text: "PDF" }) : el("img", { src: imgSrc(pid), alt: "올린 사진" }), el("button", { type: "button", text: "빼기", onclick: () => { S.keepPhotos.splice(i, 1); S.removed = (S.removed || []).concat([pid]); drawThumbs(); } }))); });
+    S.keepPhotos.forEach((p, i) => { const pid = typeof p === "string" ? p : p.id; const isPdf = isPdfId(p); t.append(el("div", { class: "thumb" }, isPdf ? el("div", { class: "pdf", text: "PDF" }) : el("img", { src: imgSrc(pid), alt: "올린 사진" }), el("button", { type: "button", text: "빼기", onclick: () => { S.keepPhotos.splice(i, 1); S.removed = (S.removed || []).concat([pid]); drawThumbs(); } }))); });
     S.pending.forEach((f, i) => { const isPdf = f.type === "application/pdf"; const url = isPdf ? null : URL.createObjectURL(f); t.append(el("div", { class: "thumb" }, isPdf ? el("div", { class: "pdf", text: "PDF" }) : el("img", { src: url, alt: "새 사진" }), el("button", { type: "button", text: "빼기", onclick: () => { S.pending.splice(i, 1); drawThumbs(); } }))); });
   }
   function addFiles(list) {
     for (const f of list) {
-      if (!/^image\/(png|jpeg|gif|webp)$/.test(f.type) && f.type !== "application/pdf") { toast("사진(png·jpg·gif·webp)이나 PDF만 올릴 수 있어요"); continue; }
+      if (!/^image\/(png|jpeg|gif|webp|heic|heif)$/.test(f.type) && f.type !== "application/pdf") { toast("사진(jpg·png·heic 등)이나 PDF만 올릴 수 있어요"); continue; }
       if (f.size > 20 * 1024 * 1024) { toast("20MB보다 큰 파일은 올릴 수 없어요"); continue; }
       S.pending.push(f);
     }
@@ -1548,7 +1564,8 @@ td.who .last-cmt { max-width: 360px; }
       const vFail = S.vUp.filter((j) => j.state === "fail").length;
       const videos = S.keepVideos.concat(S.vUp.filter((j) => j.state === "done").map((j) => j.rec));
       const photos = S.keepPhotos.slice();
-      if (S.assets) for (const f of S.pending) { const r = await S.assets.upload(f, f.type ? undefined : { type: "image/png" }); photos.push({ id: r.id, type: r.contentType }); }
+      if (S.assets) for (let i = 0; i < S.pending.length; i++) { const f = S.pending[i]; btn.textContent = "사진 올리는 중 " + (i + 1) + "/" + S.pending.length; const r = await S.assets.upload(f, f.type ? undefined : { type: "image/png" }); photos.push({ id: r.id, type: r.contentType }); }
+      btn.textContent = "저장 중…";
       const old = S.editing ? S.items.find((x) => x.id === S.editing) : null;
       const body = Object.assign({}, old || {});
       delete body.id;
@@ -1809,7 +1826,7 @@ td.who .last-cmt { max-width: 360px; }
   let started = false;
   async function start() {
     const note = $("statusNote");
-    S.db = db; S.assets = null; S.canWrite = true;
+    S.db = db; S.assets = DRIVE_ASSETS; S.canWrite = true;
     if (!started) {
       started = true;
       db.collection("listings").onSnapshot((snap) => {
