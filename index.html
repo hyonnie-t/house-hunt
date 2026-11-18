@@ -554,7 +554,7 @@ td.who .last-cmt { max-width: 360px; }
       <div class="field"><label for="f_pfee">주차비 (만 원/월)</label><input id="f_pfee" inputmode="decimal" placeholder="없으면 비워 두기"></div>
       <div class="field"><label for="f_movein">입주 가능일</label><input id="f_movein" type="date"></div>
       <div class="field"><label for="f_deadline">신청 마감 (공고)</label><input id="f_deadline" type="date"></div>
-      <div class="field"><label for="f_status">상태</label><select id="f_status"><option>후보</option><option>관심</option><option>신청함</option><option>탈락</option></select></div>
+      <div class="field"><label for="f_status">상태</label><select id="f_status"><option>후보</option><option>신청함</option><option>탈락</option></select></div>
       <div class="field"><label for="f_priority">우선순위</label><select id="f_priority"><option value="">미정</option><option>최우선</option><option>높음</option><option>보통</option><option>낮음</option></select></div>
       <div class="field"><label for="f_rank">내 순위 (1이 제일 좋음)</label><input id="f_rank" inputmode="numeric" placeholder="예: 1"></div>
       <div class="field full"><label for="f_agent">중개사 (부동산 이름)</label><input id="f_agent" list="agentList" placeholder="예: 신대방 ○○공인"><datalist id="agentList"></datalist><span class="hint">특징은 위쪽 «중개사 정리»에서 적어요. 같은 이름이면 같은 중개사로 묶여요.</span></div>
@@ -1201,7 +1201,7 @@ td.who .last-cmt { max-width: 360px; }
     if (it.createdAt) body.append(el("p", { class: "small muted", text: "올린 날 " + String(it.createdAt).slice(0, 10) + (it.updatedAt ? " · 고친 날 " + String(it.updatedAt).slice(0, 10) : "") }));
     if (S.db) body.append(buildThread(it.id));
     if (S.canWrite && S.db) {
-      const statusSel = el("select", { "aria-label": "상태 바꾸기", class: "btn" }, ...["후보", "관심", "신청함", "탈락"].map((s) => { const o = el("option", { text: s }); if ((it.status || "후보") === s) o.selected = true; return o; }));
+      const statusSel = el("select", { "aria-label": "상태 바꾸기", class: "btn" }, ...["후보", "신청함", "탈락"].map((s) => { const o = el("option", { text: s }); if ((it.status || "후보") === s) o.selected = true; return o; }));
       statusSel.addEventListener("change", async () => { try { await S.db.doc("listings/" + it.id).update({ status: statusSel.value, updatedAt: new Date().toISOString() }); toast("상태를 «" + statusSel.value + "»로 바꿨어요"); } catch (e) { toast("저장하지 못했어요: " + (e && e.code || "오류")); } });
       const edit = el("button", { class: "btn", type: "button", text: "고치기", onclick: () => openForm(it.id) });
       const del = el("button", { class: "btn danger", type: "button", text: "지우기" });
@@ -1653,6 +1653,7 @@ td.who .last-cmt { max-width: 360px; }
   const fixDate = (v) => { if (typeof v === "string" && /GMT/.test(v)) { const d = new Date(v); if (!isNaN(d)) return d.toLocaleDateString("sv-SE", { timeZone: "Asia/Seoul" }); } return v; };
   const fromServer = (it) => { const o = Object.assign({}, it); ["moveIn", "deadline"].forEach((k) => { if (o[k]) o[k] = fixDate(o[k]); });
     // 2026-11-12: 예전 칸 순서 때문에 순위 숫자가 우선순위 칸에 들어간 집이 있다 → 순위로 읽는다(다음에 고칠 때 제자리로 저장됨)
+    if (o.status === "관심") o.status = "후보"; // 2026-11-18 «관심» 없앰: 마음은 우선순위로, 상태는 진행 단계(후보·신청함·탈락)만
     if (/^\d+$/.test(String(o.priority || "").trim())) { if (!o.rank) o.rank = Number(o.priority); o.priority = ""; } o.photos = Array.isArray(it.images) ? it.images : []; delete o.images; return o; };
   const toServer = (it) => { const o = Object.assign({}, it); o.images = (Array.isArray(it.photos) ? it.photos : []).map((p) => typeof p === "string" ? p : p.id); delete o.photos; return o; };
   const newId = () => "u" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
