@@ -1,0 +1,1912 @@
+<!doctype html>
+<!-- 이 파일은 tools/build-my.js가 index.html에서 만든다. 직접 고치지 말고 index.html·my/local.js를 고친 뒤 다시 만든다. -->
+<html lang="ko"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><style>html,body{margin:0}</style>
+<title>집 비교판 (누구나 쓰는 판)</title>
+<meta name="description" content="이사 갈 집 후보를 조건·가격·위치로 한눈에 비교하는 판. 가입 없이 이 기기에 저장하고, 파일로 주고받아 둘이 같이 봐요.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="집 비교판 — 이사 갈 집 한눈에 비교">
+<meta property="og:description" content="가입 없이 쓰는 집 후보 비교판. 조건·월 부담·지도·의견을 한곳에.">
+<meta property="og:url" content="https://hyonnie-t.github.io/house-hunt/my/">
+<meta property="og:image" content="https://hyonnie-t.github.io/house-hunt/img/househunt-og.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:locale" content="ko_KR">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#2f6b55">
+<meta name="apple-mobile-web-app-title" content="집 찾기">
+<link rel="apple-touch-icon" href="../apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="../icon-32.png">
+<link rel="icon" type="image/png" sizes="192x192" href="../icon-192.png">
+<link rel="manifest" href="manifest.webmanifest">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500&display=swap">
+<style>
+/* Layout: sticky 조건·필터 띠 → 비교 패널 → 한 줄에 한 집인 비교표(넓을 때) / 카드(좁을 때) */
+:root {
+  /* 간격 눈금 8pt (위키 도구/ui-간격-8pt-규칙.md, 2026-11-12) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 16px;
+  --space-4: 24px;
+  --space-5: 32px;
+  --space-6: 48px;
+  --space-7: 64px;
+  --bg: #f5f6f4;
+  --surface: #ffffff;
+  --ink: #1d2420;
+  --sub: #5b665f;
+  --line: #dde2de;
+  --accent: #2f6b55;
+  --accent-soft: #e3efe9;
+  --ok: #24764f;
+  --ok-soft: #e1f2e8;
+  --warn: #9a5b07;
+  --warn-soft: #fbefd9;
+  --no: #a23a2a;
+  --no-soft: #f8e4e0;
+  --unk: #565d66;
+  --unk-soft: #eceef0;
+  --star: #b7791f;
+  --shadow: 0 1px 2px rgba(20,30,25,.06), 0 4px 14px rgba(20,30,25,.05);
+  --f-body: "IBM Plex Sans KR", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+  --f-num: "IBM Plex Mono", ui-monospace, "Consolas", monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #141816; --surface: #1c2220; --ink: #e7ece9; --sub: #a3aea8; --line: #2e3733;
+    --accent: #7cc4a6; --accent-soft: #1f3a30; --ok: #7fd1a3; --ok-soft: #1d3428; --warn: #e8b35c; --warn-soft: #3a2e17;
+    --no: #f08f7e; --no-soft: #3d221d; --unk: #9aa3ab; --unk-soft: #262c2a; --star: #e8b35c;
+    --shadow: 0 1px 2px rgba(0,0,0,.3); color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #141816; --surface: #1c2220; --ink: #e7ece9; --sub: #a3aea8; --line: #2e3733;
+  --accent: #7cc4a6; --accent-soft: #1f3a30; --ok: #7fd1a3; --ok-soft: #1d3428; --warn: #e8b35c; --warn-soft: #3a2e17;
+  --no: #f08f7e; --no-soft: #3d221d; --unk: #9aa3ab; --unk-soft: #262c2a; --star: #e8b35c;
+  --shadow: 0 1px 2px rgba(0,0,0,.3); color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font: 15px/1.5 var(--f-body); }
+.wrap { max-width: 1180px; margin: 0 auto; padding-left: max(var(--space-3), env(safe-area-inset-left, 0px)); padding-right: max(var(--space-3), env(safe-area-inset-right, 0px)); padding-block: var(--space-3) var(--space-6); }
+h1 { font-size: 1.55rem; margin: 0; letter-spacing: -.01em; text-wrap: balance; }
+h2 { font-size: 1.05rem; margin: 0; }
+.num { font-family: var(--f-num); font-variant-numeric: tabular-nums; }
+.muted { color: var(--sub); }
+.small { font-size: .82rem; }
+button, select, input, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.head { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-3); align-items: flex-end; justify-content: space-between; margin-bottom: var(--space-3); }
+.head p { margin: var(--space-1) 0 0; }
+.install-wrap { text-align: center; margin-top: var(--space-3); }
+.install-wrap[hidden] { display: none; }
+.install-btn { background: none; border: 0; color: var(--sub); font: inherit; font-size: .85rem; text-decoration: underline; text-underline-offset: 3px; padding: var(--space-2) var(--space-3); border-radius: 8px; cursor: pointer; }
+.install-btn:hover { color: var(--accent); }
+.inst-dlg { margin: auto; border: 0; border-radius: 14px; padding: var(--space-3) var(--space-3) var(--space-3); max-width: 360px; width: calc(100% - 32px); box-shadow: 0 10px 40px rgba(0,0,0,.25); background: var(--surface); color: var(--ink); font-family: var(--f-body); }
+.inst-dlg::backdrop { background: rgba(10,15,12,.45); }
+.inst-dlg h3 { margin: 0 0 var(--space-2); font-size: 1.05rem; }
+.inst-dlg ol { padding-left: var(--space-3); margin: 0 0 var(--space-2); line-height: 1.8; }
+.inst-dlg p { margin: 0 0 var(--space-3); font-size: .82rem; color: var(--sub); }
+.inst-dlg button { width: 100%; border: 0; background: var(--accent); color: #fff; border-radius: 10px; padding: var(--space-2); font: inherit; font-weight: 600; cursor: pointer; }
+.btn { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: var(--space-2) var(--space-2); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--surface); font-weight: 600; }
+.btn.ghost { background: transparent; }
+.btn.danger { color: var(--no); border-color: var(--no); background: transparent; }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+/* 새로고침 버튼: 44px 터치 영역, 누르면 아이콘이 한 바퀴 (아이콘 도형: Lucian Icons refresh, MIT © 2026 Lucian) */
+.btn.icon { position: relative; padding: var(--space-2); display: inline-flex; align-items: center; justify-content: center; flex: none; line-height: 1; } /* 다른 .btn과 같은 높이: 패딩 7px + 아이콘 22.5px + 테두리 */
+.btn.icon::after { content: ""; position: absolute; inset: -3px; } /* 보이는 크기는 그대로, 터치 영역만 투명하게 넓힘 */
+.btn.icon svg { width: 22.5px; height: 22.5px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.btn.icon.spin svg { animation: hhspin .6s ease-in-out both; }
+@keyframes hhspin { to { transform: rotate(360deg); } }
+
+/* 조건 띠 (sticky) */
+.bar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); padding-block: var(--space-2); border-bottom: 1px solid var(--line); margin-bottom: var(--space-3); }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+.chips { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
+.chip { background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 2px var(--space-2); font-size: .82rem; white-space: nowrap; }
+.chip b { font-weight: 600; }
+.filters { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; margin-top: var(--space-2); }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--surface); }
+.seg button { border: 0; background: transparent; padding: var(--space-1) var(--space-2); font-size: .86rem; }
+.seg button[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.filters select { border: 1px solid var(--line); border-radius: 8px; background: var(--surface); padding: var(--space-1) var(--space-2); font-size: .86rem; }
+.grow { flex: 1 1 auto; }
+
+.note { border-radius: 8px; padding: var(--space-2) var(--space-2); background: var(--unk-soft); color: var(--sub); font-size: .88rem; margin-bottom: var(--space-3); }
+.note.warn { background: var(--warn-soft); color: var(--warn); }
+
+/* 비교 패널 */
+.compare { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); padding: var(--space-2); margin-bottom: var(--space-3); }
+.compare-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--space-2); margin-top: var(--space-2); }
+.cmp-col { border: 1px solid var(--line); border-radius: 10px; padding: var(--space-2); min-width: 0; }
+.cmp-col h3 { margin: 0 0 var(--space-2); font-size: .98rem; }
+.cmp-row { display: flex; justify-content: space-between; gap: var(--space-2); padding: var(--space-1) 0; border-top: 1px dashed var(--line); font-size: .88rem; }
+.cmp-row:first-of-type { border-top: 0; }
+.best { color: var(--ok); font-weight: 700; }
+.best::after { content: " ★"; color: var(--star); }
+
+/* 비교표 */
+.tablebox { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); }
+table { width: 100%; border-collapse: collapse; min-width: 980px; }
+th, td { padding: var(--space-2) var(--space-2); border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; font-size: .9rem; }
+th { font-size: .78rem; color: var(--sub); font-weight: 600; letter-spacing: .02em; background: var(--surface); white-space: nowrap; }
+td.r, th.r { text-align: right; white-space: nowrap; }
+td.when { white-space: nowrap; }
+td.who { min-width: 210px; }
+td.flagcell { min-width: 170px; }
+tbody tr { cursor: pointer; animation: rise .32s cubic-bezier(.2,.8,.3,1.2) both; }
+tbody tr:hover { background: var(--accent-soft); }
+tbody tr.dead { opacity: .55; }
+@keyframes rise { from { transform: translateY(6px); opacity: .4; } to { transform: none; opacity: 1; } }
+.name { font-weight: 600; }
+.badge { display: inline-block; border-radius: 6px; padding: 1px var(--space-2); font-size: .74rem; font-weight: 600; margin-right: var(--space-1); white-space: nowrap; }
+.b-공고 { background: var(--accent-soft); color: var(--accent); }
+.b-매물 { background: var(--unk-soft); color: var(--sub); }
+.b-claude { background: var(--warn-soft); color: var(--warn); }
+.b-fill { background: var(--accent-soft); color: var(--accent); }
+.quick { border: 1.5px dashed var(--accent); border-radius: 10px; padding: var(--space-2); background: var(--accent-soft); }
+.quick textarea { min-height: 64px; }
+.quick .actions { margin-top: var(--space-2); }
+.field.got input, .field.got select { animation: got 1.2s ease-out; }
+@keyframes got { 0% { background: var(--ok-soft); box-shadow: 0 0 0 2px var(--ok); } 100% { background: var(--bg); box-shadow: none; } }
+.st { border-radius: 999px; padding: 1px var(--space-2); font-size: .78rem; font-weight: 600; white-space: nowrap; }
+.st-후보 { background: var(--unk-soft); color: var(--sub); }
+.st-관심 { background: var(--accent-soft); color: var(--accent); }
+.st-신청함 { background: var(--ok-soft); color: var(--ok); }
+.st-탈락 { background: var(--no-soft); color: var(--no); }
+.flags { display: flex; flex-wrap: wrap; gap: var(--space-1); }
+.f { border-radius: 5px; padding: 1px var(--space-1); font-size: .74rem; white-space: nowrap; }
+.f.ok { background: var(--ok-soft); color: var(--ok); }
+.f.warn { background: var(--warn-soft); color: var(--warn); }
+.f.no { background: var(--no-soft); color: var(--no); }
+.f.unk { background: var(--unk-soft); color: var(--unk); }
+.star { color: var(--star); }
+.score { font-weight: 700; }
+input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
+
+/* 카드 (좁은 화면) */
+.cards { display: none; gap: var(--space-2); }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: var(--space-3); box-shadow: var(--shadow); animation: rise .32s cubic-bezier(.2,.8,.3,1.2) both; min-width: 0; }
+.card .top { display: flex; gap: var(--space-2); align-items: flex-start; justify-content: space-between; }
+.card dl { display: grid; grid-template-columns: auto 1fr; gap: 2px var(--space-2); margin: var(--space-2) 0; font-size: .88rem; }
+.card dt { color: var(--sub); }
+.card dd { margin: 0; }
+.card .top label { white-space: nowrap; display: inline-flex; gap: var(--space-1); align-items: center; }
+/* 새 소식 줄·카드 요약 (2026-11-12) */
+.news { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-2); align-items: center; background: var(--accent-soft); color: var(--accent); border-radius: 10px; padding: var(--space-2) var(--space-2); margin-bottom: var(--space-2); font-size: .86rem; animation: rise .32s ease-out both; }
+.news[hidden] { display: none; }
+.news b { font-family: var(--f-num); }
+.news .btn { padding: var(--space-1) var(--space-2); font-size: .8rem; }
+.b-new { background: var(--ok-soft); color: var(--ok); }
+.b-upd { background: var(--warn-soft); color: var(--warn); }
+.b-cmt { background: var(--accent-soft); color: var(--accent); }
+.card.is-new { border-color: var(--ok); }
+.kp { display: grid; grid-template-columns: 1.4fr 1fr .9fr; gap: var(--space-2); margin: var(--space-2) 0 var(--space-2); }
+.kp div { background: var(--bg); border-radius: 8px; padding: var(--space-1) var(--space-2); min-width: 0; }
+.kp span { display: block; font-size: .72rem; color: var(--sub); }
+.kp strong { display: block; font-family: var(--f-num); font-weight: 600; font-size: .92rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kp .big strong { font-size: 1.08rem; color: var(--accent); }
+.kp .dep strong { white-space: normal; } /* «2억 3,800»은 폰에서 두 줄로(잘리지 않게, 2026-11-17) */
+.card .sub { font-size: .8rem; color: var(--sub); margin-bottom: var(--space-2); }
+.card .last-cmt, td.who .last-cmt { margin-top: var(--space-2); padding: var(--space-1) var(--space-2); border-left: 3px solid var(--accent); background: var(--bg); border-radius: 0 6px 6px 0; font-size: .82rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card .last-cmt b, td.who .last-cmt b { color: var(--accent); }
+/* 의견 태그(2026-11-13): 의견 글에서 키워드로 뽑은 이름표. good=초록, warn=주황 */
+.f.tg-good { background: var(--ok-soft); color: var(--ok); font-weight: 600; }
+.f.tg-warn { background: var(--warn-soft); color: var(--warn); font-weight: 600; }
+td.who .last-cmt { max-width: 360px; }
+.card .last-cmt, td.who .last-cmt { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; font-size: .88rem; }
+.condtoggle { display: none; }
+.lg-only { display: inline; }
+#gateSheet { background: var(--bg); align-items: center; justify-content: center; }
+#gateSheet .panel { box-shadow: none; border: 1px solid var(--line); border-radius: 14px; animation: rise .3s ease-out both; padding: var(--space-4) var(--space-3); }
+#gateSheet h2 { margin: var(--space-3) 0 var(--space-3); }
+#gateSheet .actions .btn { width: 100%; padding: var(--space-2); }
+.gate-brand { display: flex; gap: var(--space-3); align-items: center; padding-bottom: var(--space-3); border-bottom: 1px solid var(--line); }
+.gate-brand img { border-radius: 11px; flex: none; }
+.gate-brand b { font-size: 1.05rem; }
+/* 상세 창 다시 정리(2026-11-12): 위에 붙는 제목 줄, 정리 칸, 의견 */
+.panel:has(> .panel-head) { padding-top: 0; } /* 제목 줄이 있는 창은 위 여백을 제목 줄이 갖는다(음수 값 없이 고정, 2026-11-12) */
+.panel-head { position: sticky; top: 0; padding-top: max(var(--space-3), env(safe-area-inset-top, 0px)); padding-bottom: var(--space-2); background: var(--surface); border-bottom: 1px solid var(--line); z-index: 3; }
+.panel-head h2 { line-height: 1.35; }
+.kv .num { font-family: var(--f-body); font-variant-numeric: tabular-nums; }
+.org { display: grid; grid-template-columns: 1fr 1fr 5.5em; gap: var(--space-2); margin: var(--space-3) 0 var(--space-1); }
+.org:empty { display: none; }
+.orgf { display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; font-size: .76rem; color: var(--sub); font-weight: 600; }
+.orgf select, .orgf input { border: 1px solid var(--line); border-radius: 8px; padding: var(--space-2) var(--space-2); background: var(--bg); font-size: .92rem; font-weight: 400; color: var(--ink); min-width: 0; width: 100%; }
+.endacts { border-top: 1px solid var(--line); padding-top: var(--space-3); }
+.cmt { border-top: 1px dashed var(--line); padding: var(--space-2) 0; }
+.cmt-h { display: flex; justify-content: space-between; align-items: center; gap: var(--space-2); }
+.linkbtn { border: 0; background: none; padding: 2px var(--space-1); color: var(--sub); font-size: .78rem; text-decoration: underline; text-underline-offset: 2px; }
+.actions.cmform { flex-wrap: nowrap; }
+.cmform .btn { flex: none; }
+/* 폰 카드 머리(2026-11-12) */
+.card .ttl { min-width: 0; flex: 1 1 auto; }
+.card .name { line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.card .aka { font-size: .76rem; color: var(--sub); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card .meta { font-size: .8rem; color: var(--sub); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cmpchk { flex: none; display: flex; flex-direction: column; align-items: center; gap: 1px; font-size: .68rem; color: var(--sub); padding: 2px 0 2px var(--space-1); }
+.card .flags { gap: var(--space-1); align-items: center; }
+.card .flags > span { line-height: 1.5; }
+.f.new { background: var(--ok-soft); color: var(--ok); font-weight: 600; }
+.f.upd { background: var(--warn-soft); color: var(--warn); font-weight: 600; }
+.f.newcmt { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+@media (max-width: 760px) {
+  .tablebox { display: none; }
+  .cards { display: grid; }
+  .bar { position: static; padding-block: var(--space-1); margin-bottom: var(--space-2); }
+  .head p.small { display: none; }
+  .head h1 { font-size: 1.3rem; margin: 0; }
+  .head { flex-wrap: nowrap; align-items: center; }
+  .head .chips { flex-wrap: nowrap; gap: var(--space-2); }
+  .head .btn:not(.icon) { padding: var(--space-1) var(--space-2); font-size: .86rem; }
+  .lg-only { display: none; }
+  .condtoggle { display: block; width: 100%; text-align: left; overflow: hidden; text-overflow: ellipsis; padding: var(--space-1) var(--space-2); }
+  #condChips { display: none; margin-top: var(--space-2); }
+  .bar.cond-open #condChips { display: flex; }
+  .filters { flex-wrap: nowrap; overflow-x: auto; margin-top: var(--space-2); padding-bottom: 2px; scrollbar-width: none; padding-right: var(--space-4); -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 28px), transparent); } /* 오른쪽이 흐려져 «밀면 더 있음»을 알림 */
+  .filters::-webkit-scrollbar { display: none; }
+  .filters > * { flex: none; }
+  .filters label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .filters .grow { display: none; }
+  #countLbl { display: block; margin-top: var(--space-1); }
+  #gateSheet .panel { width: calc(100% - 32px); }
+}
+
+/* 순위·우선순위·별칭·중개사 */
+.rk { display: inline-block; background: var(--accent); color: var(--surface); border-radius: 6px; padding: 0 var(--space-1); font-size: .74rem; font-weight: 700; margin-right: var(--space-1); font-family: var(--f-num); }
+.pri { display: inline-block; border-radius: 6px; padding: 0 var(--space-1); font-size: .74rem; font-weight: 700; margin-right: var(--space-1); }
+.pri-최우선 { background: var(--no-soft); color: var(--no); }
+.pri-높음 { background: var(--warn-soft); color: var(--warn); }
+.pri-보통 { background: var(--unk-soft); color: var(--sub); }
+.pri-낮음 { background: transparent; color: var(--sub); border: 1px solid var(--line); }
+.stars { color: var(--star); letter-spacing: 1px; }
+.acard { border: 1px solid var(--line); border-radius: 10px; padding: var(--space-3); margin-top: var(--space-2); }
+.acard h3 { margin: 0 0 var(--space-1); font-size: 1rem; }
+.agentbox { border: 1px solid var(--line); border-radius: 10px; padding: var(--space-2) var(--space-2); margin: var(--space-2) 0; background: var(--bg); }
+.agentbox h3 { margin: 0 0 var(--space-1); font-size: .95rem; }
+
+/* 상세·입력 패널 */
+.sheet { position: fixed; inset: 0; z-index: 20; display: flex; justify-content: flex-end; background: rgba(10,15,12,.38); }
+.sheet[hidden] { display: none !important; }
+.panel { width: min(560px, 100%); height: 100%; overflow-y: auto; background: var(--surface); padding: var(--space-3) max(var(--space-3), env(safe-area-inset-right, 0px)) var(--space-5) var(--space-3); padding-top: max(var(--space-3), env(safe-area-inset-top, 0px)); box-shadow: -8px 0 30px rgba(0,0,0,.18); animation: slide .25s ease-out both; }
+@keyframes slide { from { transform: translateX(24px); opacity: .6; } to { transform: none; opacity: 1; } }
+.panel-head { display: flex; justify-content: space-between; align-items: center; gap: var(--space-2); margin-bottom: var(--space-2); }
+.form { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-2) var(--space-3); }
+.form .full { grid-column: 1 / -1; }
+.field { display: flex; flex-direction: column; gap: var(--space-1); min-width: 0; }
+.field label { font-size: .8rem; color: var(--sub); font-weight: 600; }
+.field input, .field select, .field textarea { border: 1px solid var(--line); border-radius: 8px; padding: var(--space-2) var(--space-2); background: var(--bg); min-width: 0; width: 100%; }
+.field textarea { min-height: 80px; resize: vertical; }
+.hint { font-size: .78rem; color: var(--sub); }
+.drop { border: 1.5px dashed var(--line); border-radius: 10px; padding: var(--space-2); text-align: center; color: var(--sub); font-size: .86rem; }
+.drop.on { border-color: var(--accent); background: var(--accent-soft); }
+.thumbs { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-2); }
+.thumb { position: relative; width: 92px; height: 72px; border-radius: 8px; overflow: hidden; border: 1px solid var(--line); background: var(--unk-soft); }
+.thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.thumb .pdf { display: flex; align-items: center; justify-content: center; height: 100%; font-size: .8rem; color: var(--sub); }
+.thumb button { position: absolute; top: 2px; right: 2px; border: 0; border-radius: 6px; background: rgba(0,0,0,.6); color: #fff; font-size: .72rem; padding: 1px var(--space-1); }
+/* 검색(2026-11-18) */
+.search { position: relative; display: flex; align-items: center; gap: var(--space-2); margin-top: var(--space-2); max-width: 480px; }
+.search svg { position: absolute; left: var(--space-2); width: 16px; height: 16px; color: var(--sub); pointer-events: none; }
+.search input { flex: 1; min-width: 0; height: 40px; border: 1px solid var(--line); border-radius: 8px; padding: 0 var(--space-5) 0 var(--space-5); background: var(--surface); color: var(--ink); font: inherit; font-size: 16px; } /* 16px: 아이폰이 눌렀을 때 화면을 키우지 않게 */
+.search input::-webkit-search-cancel-button { display: none; }
+.search input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+.search .qx { position: absolute; right: var(--space-1); height: 32px; min-width: 32px; border: 0; background: transparent; color: var(--sub); border-radius: 6px; font-size: .9rem; }
+.search .qx:hover { background: var(--unk-soft); }
+.empty .btn { margin-top: var(--space-2); }
+/* 동영상(2026-11-18) */
+.vlist { display: flex; flex-direction: column; gap: var(--space-2); margin-top: var(--space-2); }
+.vrow { display: grid; grid-template-columns: 1fr auto; gap: var(--space-1) var(--space-2); align-items: center; border: 1px solid var(--line); border-radius: 8px; padding: var(--space-2); background: var(--bg); font-size: .86rem; min-width: 0; }
+.vrow .vn { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.vrow .vs { grid-column: 1 / -1; font-size: .76rem; color: var(--sub); }
+.vrow .vs.fail { color: var(--no); }
+.vrow .vbar { grid-column: 1 / -1; height: 4px; border-radius: 4px; background: var(--unk-soft); overflow: hidden; }
+.vrow .vbar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .3s ease-out; }
+.vrow .vact { display: flex; gap: var(--space-1); }
+.vrow .vact button { border: 1px solid var(--line); background: var(--surface); border-radius: 6px; padding: var(--space-1) var(--space-2); font-size: .76rem; }
+.videos { margin: var(--space-3) 0; }
+.videos h3 { margin: 0 0 var(--space-2); font-size: .98rem; }
+.vcard { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; margin-bottom: var(--space-2); background: var(--bg); }
+.vcard .vplay { display: flex; align-items: center; gap: var(--space-2); width: 100%; border: 0; background: transparent; padding: var(--space-3); text-align: left; font: inherit; color: var(--ink); cursor: pointer; }
+.vcard .vplay b { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; background: var(--accent); color: #fff; font-size: 1rem; transition: transform .15s ease-out; }
+.vcard .vplay:hover b { transform: scale(1.08); }
+.vcard .vplay span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vcard iframe { display: block; width: 100%; height: min(70vh, 520px); border: 0; background: #000; }
+.vcard .vfoot { display: flex; justify-content: space-between; gap: var(--space-2); padding: var(--space-1) var(--space-2); font-size: .76rem; color: var(--sub); }
+.f.vid, .badge.vid { background: var(--accent-soft); color: var(--accent); }
+.gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: var(--space-2); margin: var(--space-2) 0; }
+.gallery a { display: block; border-radius: 8px; overflow: hidden; border: 1px solid var(--line); background: var(--unk-soft); aspect-ratio: 4 / 3; max-width: 100%; }
+.gallery img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.gallery button.ph { display: block; width: 100%; padding: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--unk-soft); aspect-ratio: 4 / 3; cursor: zoom-in; }
+.gallery .more { font-size: .78rem; color: var(--sub); grid-column: 1 / -1; margin-top: calc(-1 * var(--space-1)); }
+/* 사진 넘겨 보기: 한 번 밀면 한 장(scroll-snap), PC는 ◀▶·방향키 */
+.pv { position: fixed; inset: 0; z-index: 40; background: #0b0d0c; display: flex; flex-direction: column; animation: pvIn .18s ease-out; }
+.pv[hidden] { display: none !important; }
+@keyframes pvIn { from { opacity: 0; } to { opacity: 1; } }
+.pv-top { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding: var(--space-2) var(--space-3); padding-top: max(var(--space-2), env(safe-area-inset-top)); color: #fff; font-size: .9rem; }
+.pv-top button { min-height: 40px; padding: 0 var(--space-3); border: 0; border-radius: 8px; background: rgba(255,255,255,.14); color: #fff; font-size: .9rem; }
+.pv-track { flex: 1; min-height: 0; display: flex; overflow-x: auto; overflow-y: hidden; scroll-snap-type: x mandatory; scrollbar-width: none; overscroll-behavior: contain; }
+.pv-track::-webkit-scrollbar { display: none; }
+.pv-slide { flex: 0 0 100%; scroll-snap-align: center; scroll-snap-stop: always; display: flex; align-items: center; justify-content: center; padding: var(--space-2); }
+.pv-slide img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 4px; user-select: none; -webkit-user-drag: none; }
+.pv-nav { position: absolute; top: 50%; transform: translateY(-50%); width: 48px; height: 48px; border: 0; border-radius: 50%; background: rgba(255,255,255,.16); color: #fff; font-size: 1.4rem; line-height: 1; }
+.pv-nav:hover { background: rgba(255,255,255,.28); }
+.pv-nav[disabled] { opacity: .25; }
+.pv-nav[hidden] { display: none; }
+.pv-prev { left: var(--space-3); } .pv-next { right: var(--space-3); }
+.pv-dots { display: flex; justify-content: center; gap: var(--space-1); min-height: 8px; padding: var(--space-2); padding-bottom: max(var(--space-3), env(safe-area-inset-bottom)); }
+.pv-dots i { width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,.3); transition: background .15s, transform .15s; }
+.pv-dots i.on { background: #fff; transform: scale(1.25); }
+@media (hover: none) { .pv-nav { display: none; } }
+@media (prefers-reduced-motion: reduce) { .pv { animation: none; } }
+.kv { display: grid; grid-template-columns: 110px 1fr; gap: var(--space-1) var(--space-2); font-size: .9rem; margin: var(--space-2) 0; }
+.kv div:nth-child(odd) { color: var(--sub); }
+.actions { display: flex; flex-wrap: wrap; gap: var(--space-2); margin-top: var(--space-3); }
+.confirm { background: var(--no-soft); color: var(--no); border-radius: 8px; padding: var(--space-2) var(--space-2); margin-top: var(--space-2); display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
+.empty { text-align: center; padding: var(--space-5) var(--space-3); color: var(--sub); }
+.toast { position: fixed; left: 50%; bottom: max(18px, env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: var(--space-2) var(--space-3); border-radius: 8px; font-size: .88rem; z-index: 30; }
+.memo-cell { max-width: 220px; color: var(--sub); font-size: .82rem; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+/* 태블릿 세로(≤1024)도 표 대신 카드, 넓으면 두 줄로(2026-11-12) */
+/* 위치·지도 (2026-11-13) */
+.card .meta.dist { display: flex; align-items: center; gap: var(--space-1); color: var(--accent); }
+.card .meta.dist.unk { color: var(--sub); }
+.pin-ic { width: 12px; height: 12px; flex: none; fill: none; stroke: currentColor; stroke-width: 2.2; }
+.dist { color: var(--accent); }
+.maplinks { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-3); align-items: baseline; }
+.mapwrap { margin-top: var(--space-2); animation: rise .32s cubic-bezier(.2,.8,.3,1.2) both; }
+.map-legend { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2) var(--space-3); font-size: .8rem; color: var(--sub); margin-bottom: var(--space-2); }
+.map-legend i { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: var(--space-1); vertical-align: -1px; border: 2px solid; }
+.map-legend .lg-live { background: var(--accent); border-color: var(--accent); }
+.map-legend .lg-warn { background: var(--warn); border-color: var(--warn); }
+.map-legend .lg-dead { background: transparent; border-color: var(--sub); opacity: .6; }
+.map-legend .lg-rough { background: transparent; border: 2px dashed var(--accent); }
+.map-legend .lg-ref { background: var(--surface); border: 3px solid var(--ink); }
+.mapbox { height: min(68vh, 640px); min-height: 320px; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; box-shadow: var(--shadow); background: var(--accent-soft); }
+#mapNote { margin-top: var(--space-2); }
+.wrap.view-map .tablebox, .wrap.view-map .cards { display: none !important; }
+.mapbox.leaflet-container { font: inherit; }
+.mapbox .leaflet-popup-content-wrapper, .mapbox .leaflet-popup-tip { background: var(--surface); color: var(--ink); }
+.mapbox .leaflet-popup-content { margin: var(--space-3); }
+.pin-pop .pp + .pp { border-top: 1px solid var(--line); margin-top: var(--space-2); padding-top: var(--space-2); }
+.pin-pop .name { font-weight: 700; margin-bottom: var(--space-1); }
+.pin-pop .btn { margin-top: var(--space-2); min-height: 32px; }
+.mapbox .pin-tip { font-weight: 700; }
+.leaflet-interactive.pin { animation: pinIn .36s cubic-bezier(.2,.8,.3,1.4) both; transform-box: fill-box; transform-origin: center; }
+@keyframes pinIn { from { opacity: 0; transform: scale(.3); } to { opacity: 1; transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) { .mapwrap, .leaflet-interactive.pin { animation: none; } }
+@media (max-width: 760px) { .mapbox { height: 62vh; } .map-legend { gap: var(--space-1) var(--space-2); } }
+@media (max-width: 1024px) { .tablebox { display: none; } .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(330px, 100%), 1fr)); align-items: start; } }
+@media (max-width: 520px) { .form { grid-template-columns: 1fr 1fr; gap: var(--space-2); } .kv { grid-template-columns: 92px 1fr; } .field .hint { font-size: .72rem; } } /* 폰에서도 짧은 칸은 두 개씩(2026-11-12) */
+@media (max-width: 340px) { .form { grid-template-columns: 1fr; } }
+</style>
+
+<div class="wrap">
+  <header class="head">
+    <div>
+      <h1>집 비교판</h1>
+      <p class="muted small">가입 없이 쓰는 이사 후보 비교판 · 기록은 이 기기에만 · 공고와 매물을 한 표에서</p>
+    </div>
+    <div class="chips">
+      <button class="btn icon" id="btnReload" type="button" aria-label="새로고침" title="새로고침"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 0 1 13.66-5.66L20 8.5"/><path d="M20 3.5v5h-5"/><path d="M20 12a8 8 0 0 1-13.66 5.66L4 15.5"/><path d="M4 20.5v-5h5"/></svg></button>
+      <button class="btn" id="btnAgents" type="button">중개사<span class="lg-only"> 정리</span></button>
+      <button class="btn" id="btnCond" type="button">조건<span class="lg-only"> 고치기</span></button>
+      <button class="btn primary" id="btnAdd" type="button">+ <span class="lg-only">매물 </span>올리기</button>
+    </div>
+  </header>
+
+  <div class="bar" id="topBar">
+    <div class="news" id="newsBar" hidden role="status"></div>
+    <button type="button" class="chip condtoggle" id="btnCondShow" aria-expanded="false" aria-controls="condChips"></button>
+    <div class="chips" id="condChips"></div>
+    <div class="search" role="search">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <input id="q" type="search" placeholder="찾기: 이름·별칭·동네·중개사·메모·의견" aria-label="집 찾기" autocomplete="off" enterkeyhint="search">
+      <button type="button" class="qx" id="qClear" hidden aria-label="찾는 말 지우기">✕</button>
+    </div>
+    <div class="filters">
+      <div class="seg" role="group" aria-label="보기">
+        <button type="button" data-view="list" aria-pressed="true">목록</button>
+        <button type="button" data-view="map" aria-pressed="false">지도</button>
+      </div>
+      <div class="seg" role="group" aria-label="상태">
+        <button type="button" data-status="live" aria-pressed="true">살아 있는 후보</button>
+        <button type="button" data-status="all" aria-pressed="false">전체</button>
+        <button type="button" data-status="탈락" aria-pressed="false">탈락</button>
+      </div>
+      <div class="seg" role="group" aria-label="종류">
+        <button type="button" data-kind="all" aria-pressed="true">전부</button>
+        <button type="button" data-kind="공고" aria-pressed="false">공고</button>
+        <button type="button" data-kind="매물" aria-pressed="false">매물</button>
+      </div>
+      <label class="small muted" for="priSel">우선순위</label>
+      <select id="priSel">
+        <option value="all">전부</option>
+        <option value="최우선">최우선</option>
+        <option value="높음">높음</option>
+        <option value="보통">보통</option>
+        <option value="낮음">낮음</option>
+        <option value="none">미정</option>
+      </select>
+      <label class="small muted" for="tagSel">의견 태그</label>
+      <select id="tagSel">
+        <option value="all">전부</option>
+        <option value="주차">주차 가능</option>
+        <option value="넓음">넓음</option>
+        <option value="좁음">좁음·작음</option>
+        <option value="낡음">연식 오래됨</option>
+        <option value="위치">위치 걸림</option>
+        <option value="1순위">1순위</option>
+        <option value="none">의견 없음</option>
+      </select>
+      <label class="small muted" for="sortSel">정렬</label>
+      <select id="sortSel">
+        <option value="score">조건 맞는 순</option>
+        <option value="pri">우선순위 순(최우선→보통)</option>
+        <option value="rank">내 순위 순</option>
+        <option value="monthly">월 부담 적은 순</option>
+        <option value="area">넓은 순</option>
+        <option value="deposit">보증금 적은 순</option>
+        <option value="deadline">마감 빠른 순</option>
+        <option value="new">최근 올린 순</option>
+        <option value="dist">기준 장소 가까운 순</option>
+      </select>
+      <span class="grow"></span>
+      <span class="small muted" id="countLbl"></span>
+    </div>
+  </div>
+
+  <div class="note" id="statusNote">비교판을 불러오는 중이에요.</div>
+
+  <section class="compare" id="compareBox" hidden>
+    <div class="chips" style="justify-content:space-between">
+      <h2>골라서 나란히 보기 <span class="muted small" id="cmpCount"></span></h2>
+      <button class="btn ghost" id="btnClearCmp" type="button">선택 지우기</button>
+    </div>
+    <div class="compare-grid" id="compareGrid"></div>
+  </section>
+
+  <div class="tablebox">
+    <table>
+      <thead>
+        <tr>
+          <th title="나란히 보기">비교</th>
+          <th>집</th>
+          <th class="r">전용</th>
+          <th class="r">방</th>
+          <th class="r">보증금</th>
+          <th class="r">월세+관리비</th>
+          <th class="r" title="월세 + 관리비 + 주차비 + 대출 이자">월 부담</th>
+          <th>주차</th>
+          <th>입주 · 마감</th>
+          <th>조건</th>
+          <th>상태</th>
+          <th>메모</th>
+        </tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+  <div class="cards" id="cards"></div>
+  <section class="mapwrap" id="mapWrap" hidden aria-label="지도">
+    <div class="map-legend">
+      <span><i class="lg-live"></i>살아 있는 후보</span>
+      <span><i class="lg-warn"></i>조건 걸림</span>
+      <span><i class="lg-dead"></i>탈락</span>
+      <span><i class="lg-rough"></i>대략 위치</span>
+      <span><i class="lg-ref"></i>기준 장소</span>
+      <span class="grow"></span>
+      <button class="btn" id="btnFitMap" type="button">모두 보이게</button>
+    </div>
+    <div class="mapbox" id="mapBox"></div>
+    <p class="small muted" id="mapNote"></p>
+  </section>
+  <div class="empty" id="emptyBox" hidden>
+    <p><b>아직 비교할 집이 없어요.</b></p>
+    <p class="small">«+ 올리기»로 찾은 집을 넣어 보세요. 부동산 앱에서 «공유»로 복사한 글을 붙여넣으면 칸이 채워져요.</p>
+  </div>
+  <p class="small muted" style="margin-top:var(--space-3)">월 부담 = 월세 + 관리비 + 주차비 + (보증금 − 자기 돈) × 대출 금리 ÷ 12. 대출 금리와 자기 돈은 «조건 고치기»에서 바꿔요. 금액 단위는 만 원.</p>
+  <div class="install-wrap" id="installWrap" hidden>
+    <button type="button" class="install-btn" id="btnInstall">홈 화면에 추가하기</button>
+  </div>
+</div>
+
+<!-- 상세 -->
+<div class="sheet" id="detailSheet" hidden>
+  <div class="panel" role="dialog" aria-modal="true" aria-labelledby="dTitle">
+    <div class="panel-head">
+      <h2 id="dTitle"></h2>
+      <button class="btn ghost" type="button" data-close>닫기</button>
+    </div>
+    <div id="dBody"></div>
+  </div>
+</div>
+
+<!-- 사진 넘겨 보기 -->
+<div class="pv" id="photoViewer" hidden role="dialog" aria-modal="true" aria-label="사진 넘겨 보기">
+  <div class="pv-top"><span id="pvCount" aria-live="polite"></span><button type="button" id="pvClose">닫기</button></div>
+  <div class="pv-track" id="pvTrack" tabindex="-1"></div>
+  <button type="button" class="pv-nav pv-prev" id="pvPrev" aria-label="이전 사진">‹</button>
+  <button type="button" class="pv-nav pv-next" id="pvNext" aria-label="다음 사진">›</button>
+  <div class="pv-dots" id="pvDots" aria-hidden="true"></div>
+</div>
+
+<!-- 입력 -->
+<div class="sheet" id="formSheet" hidden>
+  <div class="panel" role="dialog" aria-modal="true" aria-labelledby="fTitle">
+    <div class="panel-head">
+      <h2 id="fTitle">매물 올리기</h2>
+      <button class="btn ghost" type="button" data-close>닫기</button>
+    </div>
+    <form id="itemForm" class="form" novalidate>
+      <div class="field full quick" id="quickBox">
+        <label for="f_quick">빠른 입력: 링크나 공유 글 붙여넣기</label>
+        <textarea id="f_quick" placeholder="네이버 부동산·당근·다방·직방에서 «공유»로 복사한 글이나 링크를 그대로 붙여넣어요"></textarea>
+        <div class="actions"><button class="btn primary" type="button" id="btnQuick">칸 채우기</button><span class="hint" id="quickMsg">읽은 값은 빈 칸에만 들어가요. 네이버 부동산은 링크 대신 매물 화면 글을 길게 눌러 복사해 붙여넣으면 채워져요.</span></div>
+      </div>
+      <div class="field full"><label for="f_name">이름 (단지·건물명이나 알아볼 말)</label><input id="f_name" required placeholder="예: ○○역 ○○빌라 3층"></div>
+      <div class="field full"><label for="f_alias">별칭 (우리끼리 부르는 이름)</label><input id="f_alias" placeholder="예: 햇살집, 역 앞 신축"></div>
+      <div class="field"><label for="f_kind">종류</label><select id="f_kind"><option>매물</option><option>공고</option></select></div>
+      <div class="field"><label for="f_deal">거래</label><select id="f_deal"><option>전세</option><option>반전세</option><option>월세</option><option>공공임대</option><option>분양</option></select></div>
+      <div class="field full"><label for="f_address">주소 (도로명·지번·건물 이름)</label>
+        <div style="display:flex;gap:var(--space-2)"><input id="f_address" placeholder="예: ○○구 ○○로 12" autocomplete="off"><button class="btn" type="button" id="btnAddr" style="flex:none">주소로 찾기</button></div>
+        <span class="hint" id="addrMsg">주소를 넣고 «주소로 찾기»를 누르면 지도 위치를 확인해요(OpenStreetMap). 도로명 주소가 가장 정확해요.</span></div>
+      <div class="field"><label for="f_station">가까운 역·동네</label><input id="f_station" placeholder="예: ○○역, ○○동"></div>
+      <div class="field"><label for="f_walk">역까지 걸어서 (분)</label><input id="f_walk" inputmode="numeric" placeholder="예: 7"></div>
+      <div class="field"><label for="f_area">전용면적 (㎡)</label><input id="f_area" inputmode="decimal" placeholder="예: 39.6"><span class="hint" id="f_area_hint">평으로 쓰면 ㎡로 바꿔서 넣어 주세요 (1평 = 3.3058㎡)</span></div>
+      <div class="field"><label for="f_rooms">방 개수</label><input id="f_rooms" inputmode="numeric" placeholder="예: 2"></div>
+      <div class="field"><label for="f_deposit">보증금 (만 원)</label><input id="f_deposit" inputmode="numeric" placeholder="예: 25000"></div>
+      <div class="field"><label for="f_rent">월세 (만 원)</label><input id="f_rent" inputmode="decimal" placeholder="전세면 0"></div>
+      <div class="field"><label for="f_mgmt">관리비 (만 원/월)</label><input id="f_mgmt" inputmode="decimal" placeholder="예: 12"></div>
+      <div class="field"><label for="f_parking">주차</label><select id="f_parking"><option>미확인</option><option>가능</option><option>불가</option></select></div>
+      <div class="field"><label for="f_pfee">주차비 (만 원/월)</label><input id="f_pfee" inputmode="decimal" placeholder="없으면 비워 두기"></div>
+      <div class="field"><label for="f_movein">입주 가능일</label><input id="f_movein" type="date"></div>
+      <div class="field"><label for="f_deadline">신청 마감 (공고)</label><input id="f_deadline" type="date"></div>
+      <div class="field"><label for="f_status">상태</label><select id="f_status"><option>후보</option><option>신청함</option><option>탈락</option></select></div>
+      <div class="field"><label for="f_priority">우선순위</label><select id="f_priority"><option value="">미정</option><option>최우선</option><option>높음</option><option>보통</option><option>낮음</option></select></div>
+      <div class="field"><label for="f_rank">내 순위 (1이 제일 좋음)</label><input id="f_rank" inputmode="numeric" placeholder="예: 1"></div>
+      <div class="field full"><label for="f_agent">중개사 (부동산 이름)</label><input id="f_agent" list="agentList" placeholder="예: ○○공인중개사"><datalist id="agentList"></datalist><span class="hint">특징은 위쪽 «중개사 정리»에서 적어요. 같은 이름이면 같은 중개사로 묶여요.</span></div>
+      <div class="field full"><label for="f_link">링크</label><input id="f_link" inputmode="url" placeholder="https://"></div>
+      <div class="field full"><label for="f_memo">메모 (좋은 점·걸리는 점)</label><textarea id="f_memo"></textarea></div>
+      <div class="field full" id="photoField">
+        <label for="f_files">사진·평면도·캡처 (여러 장 가능)</label>
+        <div class="drop" id="dropZone">여기에 끌어다 놓거나, 캡처한 그림을 붙여넣기(Ctrl+V)하거나, <button class="btn" type="button" id="btnPick">파일 고르기</button></div>
+        <input id="f_files" type="file" accept="image/*,application/pdf" multiple hidden>
+        <div class="thumbs" id="thumbs"></div>
+      </div>
+      <p class="hint full" id="noUploadHint" hidden>사진은 아직 올릴 수 없어요. 링크와 메모로 남겨 주세요.</p>
+      <div class="field full" id="videoField">
+        <label for="f_videos">동영상 (직접 찍은 것, 여러 개 가능)</label>
+        <div class="drop" id="vDrop"><button class="btn" type="button" id="btnPickVideo">동영상 고르기</button><div class="hint" style="margin-top:var(--space-1)">고르면 바로 주인 구글 드라이브 «집 찾기 영상» 폴더로 올라가요. 다 올라가면 «저장»을 눌러요(올리는 중에 눌러도 기다렸다 저장해요).</div></div>
+        <input id="f_videos" type="file" accept="video/*" multiple hidden>
+        <div class="vlist" id="vlist"></div>
+      </div>
+      <div class="actions full">
+        <button class="btn primary" type="submit" id="btnSave">저장</button>
+        <button class="btn ghost" type="button" data-close>취소</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- 조건 -->
+<div class="sheet" id="condSheet" hidden>
+  <div class="panel" role="dialog" aria-modal="true" aria-labelledby="cTitle">
+    <div class="panel-head">
+      <h2 id="cTitle">조건 고치기</h2>
+      <button class="btn ghost" type="button" data-close>닫기</button>
+    </div>
+    <form id="condForm" class="form" novalidate>
+      <div class="field"><label for="c_minArea">최소 전용면적 (㎡)</label><input id="c_minArea" inputmode="decimal"></div>
+      <div class="field"><label for="c_minRooms">최소 방 개수</label><input id="c_minRooms" inputmode="numeric"></div>
+      <div class="field"><label for="c_self">자기 돈 (만 원)</label><input id="c_self" inputmode="numeric"></div>
+      <div class="field"><label for="c_maxDep">보증금 최대 (만 원)</label><input id="c_maxDep" inputmode="numeric"></div>
+      <div class="field"><label for="c_monthly">월세+관리비 목표 (만 원)</label><input id="c_monthly" inputmode="numeric"></div>
+      <div class="field"><label for="c_rate">대출 금리 (연 %)</label><input id="c_rate" inputmode="decimal"></div>
+      <div class="field"><label for="c_moveBy">지금 집 만기</label><input id="c_moveBy" type="date"></div>
+      <div class="field"><label for="c_near">먼저 볼 동네 (쉼표로)</label><input id="c_near"></div>
+      <p class="hint full">보증금 최대는 내 돈 + 받을 수 있는 대출로 잡아 보세요. 대출 금리를 넣으면 «월 부담»에 이자가 들어가요.</p>
+      <div class="actions full">
+        <button class="btn primary" type="submit">조건 저장</button>
+        <button class="btn ghost" type="button" data-close>취소</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="sheet" id="agentSheet" hidden>
+  <div class="panel" role="dialog" aria-modal="true" aria-labelledby="aTitle">
+    <div class="panel-head">
+      <h2 id="aTitle">중개사 정리</h2>
+      <button class="btn ghost" type="button" data-close>닫기</button>
+    </div>
+    <p class="hint">부동산마다 느낌·수수료·연락처를 적어 두면 어느 집을 어디서 봤는지 기억하기 좋아요. 집 입력 칸의 «중개사» 이름과 같으면 자동으로 묶여요.</p>
+    <div id="aBody"></div>
+  </div>
+</div>
+
+<div class="sheet" id="gateSheet" hidden>
+  <div class="panel" role="dialog" aria-modal="true" aria-labelledby="gTitle" style="height:auto;max-width:420px">
+    <div class="gate-brand"><img src="../icon-192.png" alt="" width="44" height="44"><div><b>집 찾기</b></div></div>
+    <h2 id="gTitle">비밀번호를 넣어 주세요</h2>
+    <form id="gateForm" class="form" novalidate>
+      <div class="field full"><label for="gatePw">비밀번호</label><input id="gatePw" type="password" autocomplete="current-password"></div>
+      <p class="hint full" id="gateMsg">처음 한 번만 넣으면 이 기기에 기억해요.</p>
+      <div class="actions full"><button class="btn primary" type="submit">들어가기</button></div>
+    </form>
+  </div>
+</div>
+
+<div class="sheet" id="reloadSheet" hidden style="z-index:40">
+  <div class="panel" role="alertdialog" aria-modal="true" aria-labelledby="rTitle" style="align-self:center;height:auto;max-width:380px;margin:auto;border-radius:12px">
+    <h2 id="rTitle">새로고침할까요?</h2>
+    <p class="small muted">열려 있는 창에 적던 내용은 저장되지 않고 사라져요.</p>
+    <div class="actions" style="display:flex;gap:var(--space-2);justify-content:flex-end;margin-top:var(--space-3)">
+      <button class="btn ghost" type="button" id="rlNo">계속 쓰기</button>
+      <button class="btn primary" type="button" id="rlYes">새로고침</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" hidden></div>
+
+<script src="local.js"></script>
+<script>
+(function () {
+  "use strict";
+  // 범용판(/my/)은 my/local.js가 window.HH_LOCAL을 먼저 만든다: 저장은 이 기기, 사진은 IndexedDB(2026-11-20)
+  const LOCAL = window.HH_LOCAL || null;
+  const DEFAULT_COND = LOCAL.defaultCond;
+  const S = { items: [], cond: Object.assign({}, DEFAULT_COND), status: "live", kind: "all", sort: "score", pri: "all", tag: "all", q: "", sel: new Set(), db: null, assets: null, canWrite: true, editing: null, pending: [], keepPhotos: [], keepVideos: [], vUp: [], vRemoved: [], saving: false, loaded: false };
+  let EMPTY_HTML = "";
+  // 사진 주소: 드라이브에 올린 것은 «gd:파일id»(그림)·«gdp:파일id»(PDF)로 저장한다(2026-11-18). 그림은 드라이브 썸네일(긴 쪽 2000px)로 보여 준다
+  const imgSrc = (p) => LOCAL && /^lpp?:/.test(p) ? LOCAL.imgSrc(p) : /^gd:/.test(p) ? "https://drive.google.com/thumbnail?sz=w2000&id=" + encodeURIComponent(p.slice(3))
+    : /^gdp:/.test(p) ? "https://drive.google.com/file/d/" + encodeURIComponent(p.slice(4)) + "/view"
+    : /^(https?:|plans\/)/.test(p) ? p : "/_blob/" + p;
+  const isPdfId = (p) => typeof p === "object" ? /pdf/.test(p.type || "") : /^(gdp|lpp):/.test(String(p));
+  const CM = { list: [], agents: [], who: (() => { try { return localStorage.getItem("hhmy_who") || ""; } catch (e) { return ""; } })() };
+  const $ = (id) => document.getElementById(id);
+  const el = (tag, attrs, ...kids) => { const e = document.createElement(tag); if (attrs) for (const k in attrs) { if (k === "class") e.className = attrs[k]; else if (k === "text") e.textContent = attrs[k]; else if (k.startsWith("on")) e.addEventListener(k.slice(2), attrs[k]); else if (attrs[k] !== undefined && attrs[k] !== null) e.setAttribute(k, attrs[k]); } for (const c of kids) if (c != null) e.append(c); return e; };
+  const n = (v) => { if (v === "" || v == null) return null; const x = Number(String(v).replace(/[, ]/g, "")); return Number.isFinite(x) ? x : null; };
+  const fmt = (v, d) => v == null ? "–" : Number(v).toLocaleString("ko-KR", { maximumFractionDigits: d == null ? 0 : d });
+  const py = (m2) => m2 == null ? null : m2 / 3.3058;
+  // 면적은 평을 앞에, ㎡는 괄호로(2026-11-17, 주인 «평을 앞에 적고 m2를 괄호로»)
+  const areaTxt = (m2, d) => m2 == null ? "–" : fmt(py(m2), 1) + "평 (" + fmt(m2, d == null ? 1 : d) + "㎡)";
+  // 보증금처럼 큰 돈(만 원 단위)은 «1억 2천»처럼(2026-11-17, 주인 «보증금은 1억 2천 이런 식으로»). 천 단위로 안 떨어지면 «2억 3,800»
+  const won = (v) => {
+    if (v == null || isNaN(v)) return "–";
+    v = Math.round(Number(v)); if (v <= 0) return "0";
+    const eok = Math.floor(v / 10000), rest = v % 10000;
+    const r = rest === 0 ? "" : rest % 1000 === 0 ? rest / 1000 + "천" : rest.toLocaleString("ko-KR");
+    return eok ? eok + "억" + (r ? " " + r : "") : r;
+  };
+  const safeUrl = (u) => { try { const x = new URL(u); return (x.protocol === "https:" || x.protocol === "http:") ? x.href : null; } catch (e) { return null; } };
+  function toast(msg) { const t = $("toast"); t.textContent = msg; t.hidden = false; clearTimeout(toast._t); toast._t = setTimeout(() => { t.hidden = true; }, 2600); }
+
+  /* ---------- 별칭·순위·중개사 도우미 ---------- */
+  const PRI_ORDER = { "최우선": 0, "높음": 1, "보통": 2, "낮음": 3 };
+  const dispName = (it) => it.alias || it.name || "(이름 없음)";
+  function rankEls(it) { return [n(it.rank) ? el("span", { class: "rk", text: n(it.rank) + "위" }) : null, it.priority ? el("span", { class: "pri pri-" + it.priority, text: it.priority }) : null]; }
+  const stars = (r) => r ? "★".repeat(r) + "☆".repeat(5 - r) : "별점 없음";
+  const agentOf = (name) => CM.agents.find((a) => a.name === name);
+  function fillAgentList() {
+    const dl = $("agentList"); if (!dl) return;
+    const names = [...new Set([...CM.agents.map((a) => a.name), ...S.items.map((x) => x.agent).filter(Boolean)])];
+    dl.replaceChildren(...names.map((v) => el("option", { value: v })));
+  }
+
+  /* ---------- 계산 ---------- */
+  function derive(it) {
+    const c = S.cond;
+    const dep = n(it.deposit), rent = n(it.rent) || 0, mgmt = n(it.mgmt) || 0, pfee = n(it.parkingFee) || 0;
+    const loan = dep == null ? null : Math.max(0, dep - (n(c.selfFunds) || 0));
+    const interest = loan == null ? null : loan * (n(c.rate) || 0) / 100 / 12;
+    const monthly = dep == null ? null : rent + mgmt + pfee + interest;
+    const flags = [];
+    const area = n(it.area), rooms = n(it.rooms);
+    flags.push(area == null ? ["unk", "면적?"] : area >= c.minArea ? ["ok", "면적"] : ["no", "좁음"]);
+    flags.push(rooms == null ? ["unk", "방?"] : rooms >= c.minRooms ? ["ok", "방 " + rooms] : ["no", "방 " + rooms]);
+    if (dep == null) flags.push(["unk", "돈?"]);
+    else if (dep > c.maxDeposit) flags.push(["no", "보증금 초과"]);
+    else if (rent + mgmt <= c.monthlyTarget) flags.push(["ok", "예산"]);
+    else if (rent + mgmt <= c.monthlyTarget * 1.15 + 1e-6) flags.push(["warn", "월세 조금 넘음"]);
+    else flags.push(["no", "월세 초과"]);
+    flags.push(it.parking === "가능" ? ["ok", "주차"] : it.parking === "불가" ? ["warn", "주차 없음"] : ["unk", "주차?"]);
+    const mi = it.moveIn ? Date.parse(it.moveIn) : NaN, by = Date.parse(c.moveBy);
+    if (isNaN(mi) || isNaN(by)) flags.push(["unk", "입주?"]);
+    else { const days = (mi - by) / 86400000; flags.push(days < -21 ? ["warn", "만기 전 입주"] : days > 35 ? ["no", "입주 늦음"] : ["ok", "입주 시기"]); }
+    const near = String(c.near || "").split(/[,，]/).map((s) => s.trim()).filter(Boolean);
+    const hay = (it.station || "") + " " + (it.name || "") + " " + (it.address || "");
+    const isNear = near.some((k) => hay.includes(k));
+    const score = flags.filter((f) => f[0] === "ok").length + (isNear ? 0.5 : 0);
+    const hardFail = flags.some((f) => f[0] === "no");
+    return { dep, rent, mgmt, pfee, loan, interest, monthly, area, rooms, flags, isNear, score, hardFail };
+  }
+
+  // «새 것만 보기»를 뺀 필터(상태·종류·우선순위·의견 태그)를 모두 거친 집.
+  // 새 소식 줄도 이 범위로 세어, 숫자와 «새 것만 보기» 목록이 늘 같게 한다(2026-11-17, 탈락 숨김 → 모든 필터로 넓힘)
+  function baseItems() {
+    let list = S.items;
+    if (S.status === "live") list = list.filter((it) => it.status !== "탈락");
+    else if (S.status === "탈락") list = list.filter((it) => it.status === "탈락");
+    if (S.kind !== "all") list = list.filter((it) => (it.kind || "매물") === S.kind);
+    if (S.pri === "none") list = list.filter((it) => !it.priority);
+    else if (S.pri !== "all") list = list.filter((it) => it.priority === S.pri);
+    if (S.tag === "none") list = list.filter((it) => !cmtCount(it.id));
+    else if (S.tag !== "all") list = list.filter((it) => cmtTags(it.id).some((t) => t.key === S.tag));
+    const qs = qTerms();
+    if (qs.length) list = list.filter((it) => { const h = hayOf(it); return qs.every((t) => h.includes(t)); });
+    return list;
+  }
+  /* ---------- 검색(2026-11-18): 이름·별칭·동네·주소·중개사(특징 메모 포함)·메모·거래·상태·의견 글 ----------
+   * 띄어쓰기는 무시하고(«기준 장소»=«○○ 역»), 낱말 여러 개는 모두 들어 있는 집만. 다른 필터와 함께 걸린다(baseItems 안). */
+  const norm = (s) => String(s == null ? "" : s).toLowerCase().replace(/\s+/g, "");
+  const qTerms = () => String(S.q || "").trim().split(/\s+/).map(norm).filter(Boolean);
+  function hayOf(it) {
+    const ag = it.agent ? agentOf(it.agent) : null;
+    return norm([it.name, it.alias, it.station, it.address, it.agent, ag && ag.note, it.memo, it.deal, it.kind, it.status || "후보", it.priority, it.parking === "가능" ? "주차가능" : "",
+      ...CM.list.filter((c) => c.itemId === it.id).map((c) => (c.who || "") + " " + (c.text || ""))].join(" "));
+  }
+  // 찾는 말에 맞는 집이 지금 상태 필터 밖(탈락 등)에 몇 곳 있는지: 빈 화면에서 «넓혀 보기»를 권할 때
+  function qHitsElsewhere() {
+    const qs = qTerms(); if (!qs.length) return 0;
+    return S.items.filter((it) => qs.every((t) => hayOf(it).includes(t))).length;
+  }
+  function visibleItems() {
+    let list = baseItems().map((it) => ({ it, d: derive(it) }));
+    if (NEWS.only) list = list.filter((x) => newKind(x.it) || newCmts(x.it.id).length);
+    const big = 1e12;
+    const key = {
+      score: (x) => -(x.d.score - (x.d.hardFail ? 10 : 0)),
+      rank: (x) => (n(x.it.rank) == null ? big : n(x.it.rank)) * 10 + (PRI_ORDER[x.it.priority] == null ? 5 : PRI_ORDER[x.it.priority]),
+      // 우선순위 순: 최우선→높음→보통→낮음→미정, 같은 급 안에서는 내 순위(1위 먼저) → 조건 맞는 순
+      pri: (x) => (PRI_ORDER[x.it.priority] == null ? 5 : PRI_ORDER[x.it.priority]) * 1e6 + Math.min(n(x.it.rank) == null ? 9999 : n(x.it.rank), 9999) * 100 - Math.max(-99, Math.min(99, x.d.score - (x.d.hardFail ? 10 : 0))),
+      monthly: (x) => x.d.monthly == null ? big : x.d.monthly,
+      area: (x) => x.d.area == null ? big : -x.d.area,
+      deposit: (x) => x.d.dep == null ? big : x.d.dep,
+      deadline: (x) => x.it.deadline ? Date.parse(x.it.deadline) || big : big,
+      new: (x) => -(Date.parse(x.it.createdAt || 0) || 0),
+      dist: (x) => { const m = distOf(x.it); return m == null ? big : m; },
+    }[S.sort] || ((x) => 0);
+    list.sort((a, b) => key(a) - key(b) || String(a.it.name).localeCompare(String(b.it.name), "ko"));
+    return list;
+  }
+
+  /* ---------- 새 소식: 이 기기에서 지난번 연 뒤로 바뀐 것 (2026-11-12) ---------- */
+  // «한 번 보기»는 처음 연 때부터 2시간 안에 다시 연 것까지 묶는다. 그 안에서 새로고침·다시 열기를 해도 기준(hh_seen)은 그대로다.
+  // 2시간이 지나 다시 열면, 지난번 보기를 시작한 때(hh_visit)가 새 기준이 된다. «다 봤어요»는 기준을 바로 지금으로 옮긴다.
+  const SEEN_KEY = "hhmy_seen", VISIT_KEY = "hhmy_visit", TOUCH_KEY = "hhmy_touched", VISIT_MS = 2 * 3600000;
+  const NEWS = { since: null, saved: false, only: false, touched: {} };
+  const lsGet = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
+  const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* 이번만 */ } };
+  (function () {
+    NEWS.since = lsGet(SEEN_KEY);
+    const visit = lsGet(VISIT_KEY);
+    if (visit && Date.now() - (Date.parse(visit) || 0) > VISIT_MS) { NEWS.since = visit; lsSet(SEEN_KEY, visit); }
+    if (!NEWS.since) NEWS.since = new Date(Date.now() - 3 * 86400000).toISOString(); // 처음이면 최근 3일
+    try { NEWS.touched = JSON.parse(lsGet(TOUCH_KEY) || "{}") || {}; } catch (e) { NEWS.touched = {}; }
+  })();
+  const sinceT = () => Date.parse(NEWS.since) || 0;
+  // 이 기기에서 내가 고친 집: 집 id → 고친 때. 새로고침해도 남게 저장하고, 7일 지난 것은 버린다
+  function touch(id) {
+    const now = Date.now(); NEWS.touched[id] = now;
+    for (const k in NEWS.touched) if (now - NEWS.touched[k] > 7 * 86400000) delete NEWS.touched[k];
+    lsSet(TOUCH_KEY, JSON.stringify(NEWS.touched));
+  }
+  function newKind(it) {
+    const mine = NEWS.touched[it.id], up = Date.parse(it.updatedAt || 0) || 0;
+    if (mine && up <= mine + 120000) return ""; // 마지막 고침이 내 것이면 빼기(남이 그 뒤에 고치면 다시 보임)
+    const t = sinceT();
+    if ((Date.parse(it.createdAt || 0) || 0) > t) return "new";
+    if ((Date.parse(it.updatedAt || 0) || 0) > t) return "upd";
+    return "";
+  }
+  function newCmts(id) { const t = sinceT(); return CM.list.filter((c) => c.itemId === id && (Date.parse(c.at || 0) || 0) > t && (!CM.who || c.who !== CM.who)); }
+  // 의견 태그(2026-11-13): 의견 글에서 키워드로 뽑는다(저장 칸 없음). 나쁜 쪽 말(걸려·불가·좁)이 같이 있으면 주황.
+  const TAG_RULES = [
+    { key: "1순위", re: /1순위|최우선/, label: "1순위", cls: "good" },
+    { key: "주차", re: /주차/, label: "주차 가능", bad: /주차[^.,]{0,6}(걸|불가|안 ?돼|못)/, badLabel: "주차 걸림" },
+    { key: "넓음", re: /넓/, label: "넓음", cls: "good" },
+    { key: "좁음", re: /좁|작은 ?느낌|작아/, label: "좁음·작음", cls: "warn" },
+    { key: "낡음", re: /연식|오래|낡/, label: "연식 오래됨", cls: "warn" },
+    { key: "위치", re: /위치|멀|○○이랑/, label: "위치 걸림", cls: "warn" }
+  ];
+  function cmtTags(id) {
+    const txt = CM.list.filter((c) => c.itemId === id).map((c) => c.text || "").join(" ");
+    const out = [];
+    TAG_RULES.forEach((r) => {
+      if (!r.re.test(txt)) return;
+      if (r.bad && r.bad.test(txt)) out.push({ key: r.key, label: r.badLabel, cls: "warn" });
+      else out.push({ key: r.key, label: r.label, cls: r.cls || "good" });
+    });
+    return out;
+  }
+  const tagEls = (id) => cmtTags(id).map((t) => el("span", { class: "f tg-" + t.cls, text: t.label }));
+  function lastCmt(id) { const l = CM.list.filter((c) => c.itemId === id); return l.length ? l.reduce((a, b) => ((Date.parse(b.at || 0) || 0) >= (Date.parse(a.at || 0) || 0) ? b : a)) : null; }
+  // 목록을 처음 받으면: 새 «보기»의 시작이면 지금을 hh_visit로 남긴다(기준은 다음 보기 때 옮겨짐)
+  function markVisit() { const v = lsGet(VISIT_KEY); if (!v || Date.now() - (Date.parse(v) || 0) > VISIT_MS) lsSet(VISIT_KEY, new Date().toISOString()); }
+  function renderNews() {
+    const bar = $("newsBar");
+    let nNew = 0, nUpd = 0, nCmt = 0;
+    baseItems().forEach((it) => { const k = newKind(it); if (k === "new") nNew++; else if (k === "upd") nUpd++; nCmt += newCmts(it.id).length; });
+    if (!S.loaded || !(nNew + nUpd + nCmt)) { bar.hidden = true; if (NEWS.only) { NEWS.only = false; } return; }
+    const parts = [];
+    if (nNew) parts.push(el("span", null, "새 집 ", el("b", { text: String(nNew) })));
+    if (nUpd) parts.push(el("span", null, "고친 집 ", el("b", { text: String(nUpd) })));
+    if (nCmt) parts.push(el("span", null, "새 의견 ", el("b", { text: String(nCmt) })));
+    const onlyBtn = el("button", { type: "button", class: "btn", "aria-pressed": String(NEWS.only), text: NEWS.only ? "전부 보기" : "새 것만 보기" });
+    onlyBtn.addEventListener("click", () => { NEWS.only = !NEWS.only; render(); });
+    const doneBtn = el("button", { type: "button", class: "btn ghost", text: "다 봤어요" });
+    doneBtn.addEventListener("click", () => { NEWS.since = new Date().toISOString(); lsSet(SEEN_KEY, NEWS.since); lsSet(VISIT_KEY, NEWS.since); NEWS.only = false; render(); toast("새 소식 표시를 지웠어요"); });
+    bar.replaceChildren(el("span", { text: "지난번 본 뒤로" }), ...parts, el("span", { class: "grow" }), onlyBtn, doneBtn);
+    bar.hidden = false;
+  }
+
+  /* ---------- 그리기 ---------- */
+  function flagEls(d) { return el("div", { class: "flags" }, ...d.flags.map((f) => el("span", { class: "f " + f[0], text: f[1] })), d.isNear ? el("span", { class: "f ok", text: "★ 가까운 동네" }) : null); }
+  function nameEls(it, d) {
+    return el("div", null,
+      el("div", { class: "name" }, ...rankEls(it), d.isNear ? el("span", { class: "star", text: "★ " }) : null, dispName(it)),
+      it.alias && it.name ? el("div", { class: "small muted", text: it.name }) : null,
+      el("div", { class: "small muted" },
+        el("span", { class: "badge b-" + (it.kind || "매물"), text: (it.kind || "매물") + " · " + (it.deal || "–") }),
+        it.source === "자동 정리" ? el("span", { class: "badge b-claude", text: "자동 정리 검색" }) : null,
+        it.fill === "대기" ? el("span", { class: "badge b-fill", text: "자동 정리 정리 대기" }) : null,
+        newKind(it) === "new" ? el("span", { class: "badge b-new", text: "새 집" }) : newKind(it) === "upd" ? el("span", { class: "badge b-upd", text: "고침" }) : null,
+        newCmts(it.id).length ? el("span", { class: "badge b-cmt", text: "새 의견 " + newCmts(it.id).length }) : cmtCount(it.id) ? el("span", { class: "badge", text: "의견 " + cmtCount(it.id) }) : null,
+        vidCount(it) ? el("span", { class: "badge vid", text: "▶ 영상 " + vidCount(it) }) : null,
+        (it.station || "") + (n(it.walkMin) != null ? " 도보 " + n(it.walkMin) + "분" : ""),
+        it.agent ? el("span", { class: "muted", text: " · " + it.agent }) : null,
+        distText(it) ? el("span", { class: "dist", text: " · " + distText(it) }) : null),
+      cmtTags(it.id).length ? el("div", { class: "flags", style: "margin-top:var(--space-1)" }, ...tagEls(it.id)) : null,
+      lastCmtEl(it.id));
+  }
+  // 마지막 의견 한 줄(카드·표 같이 씀)
+  function lastCmtEl(id) { const lc = lastCmt(id); return lc ? el("div", { class: "last-cmt" }, el("b", { text: (lc.who || "?") + " " }), lc.text || "") : null; }
+  function moneyMonthly(d) { return d.rent || d.mgmt ? fmt(d.rent, 1) + " + " + fmt(d.mgmt, 1) : (d.dep == null ? "–" : "0"); }
+  function dateLine(it) {
+    const parts = [];
+    if (it.moveIn) parts.push("입주 " + it.moveIn.slice(2));
+    if (it.deadline) { const left = Math.ceil((Date.parse(it.deadline) - Date.now()) / 86400000); parts.push("마감 " + it.deadline.slice(5) + (left >= 0 && left <= 3 ? " (D-" + left + ")" : left < 0 ? " (지남)" : "")); }
+    return parts.join(" · ") || "–";
+  }
+
+  function render() {
+    const c = S.cond;
+    const chips = $("condChips"); chips.replaceChildren(
+      el("span", { class: "chip" }, "전용 ", el("b", { class: "num", text: areaTxt(c.minArea, 0) }), "↑"),
+      el("span", { class: "chip" }, "방 ", el("b", { class: "num", text: fmt(c.minRooms) }), "개↑"),
+      el("span", { class: "chip" }, "보증금 ", el("b", { class: "num", text: won(c.maxDeposit) }), " 이하"),
+      el("span", { class: "chip" }, "월세+관리비 ", el("b", { class: "num", text: fmt(c.monthlyTarget) }), " 내외"),
+      el("span", { class: "chip" }, "자기 돈 ", el("b", { class: "num", text: won(c.selfFunds) })),
+      el("span", { class: "chip" }, "금리 ", el("b", { class: "num", text: fmt(c.rate, 2) + "%" })),
+      c.moveBy ? el("span", { class: "chip" }, "만기 ", el("b", { class: "num", text: c.moveBy })) : "",
+      c.near ? el("span", { class: "chip" }, "★ ", c.near) : ""); // 범용판은 비어 있을 수 있음(빈 칩 숨김)
+    // 폰: 조건은 한 줄 요약으로 접어 두고 눌러서 펼친다
+    const open = $("topBar").classList.contains("cond-open");
+    $("btnCondShow").textContent = (open ? "▴ " : "▾ ") + "조건 · " + fmt(py(c.minArea), 0) + "평↑ · 방 " + fmt(c.minRooms) + "↑ · 보증금 " + won(c.maxDeposit) + "↓ · 월 " + fmt(c.monthlyTarget);
+    renderNews();
+    const list = visibleItems();
+    fillAgentList();
+    $("countLbl").textContent = (qTerms().length ? "«" + S.q.trim() + "» " : "") + list.length + "곳 표시 · 전체 " + S.items.length + "곳";
+    const rows = $("rows"), cards = $("cards");
+    rows.replaceChildren(); cards.replaceChildren();
+    list.forEach((x, i) => {
+      const { it, d } = x;
+      const cb = el("input", { type: "checkbox", "aria-label": dispName(it) + " 나란히 보기에 넣기" });
+      cb.checked = S.sel.has(it.id);
+      cb.addEventListener("click", (e) => e.stopPropagation());
+      cb.addEventListener("change", () => { if (cb.checked) S.sel.add(it.id); else S.sel.delete(it.id); renderCompare(); });
+      const tr = el("tr", { class: it.status === "탈락" ? "dead" : "", style: "animation-delay:" + Math.min(i, 12) * 0.04 + "s" },
+        el("td", null, cb),
+        el("td", { class: "who" }, nameEls(it, d)),
+        el("td", { class: "r num" }, d.area == null ? "–" : fmt(py(d.area), 1) + "평", el("div", { class: "small muted", text: d.area == null ? "" : "(" + fmt(d.area, 1) + "㎡)" })),
+        el("td", { class: "r num", text: d.rooms == null ? "–" : fmt(d.rooms) }),
+        el("td", { class: "r num", text: won(d.dep) }),
+        el("td", { class: "r num", text: moneyMonthly(d) }),
+        el("td", { class: "r num", title: d.monthly == null ? "" : "이자 " + fmt(d.interest, 1) + " (대출 " + won(d.loan) + ")" }, el("b", { text: d.monthly == null ? "–" : fmt(d.monthly, 0) })),
+        el("td", { class: "when" }, it.parking || "미확인", n(it.parkingFee) ? el("div", { class: "small muted", text: "월 " + fmt(n(it.parkingFee), 1) }) : null),
+        el("td", { class: "small when" }, ...dateLine(it).split(" · ").flatMap((s, k) => k ? [el("br"), s] : [s])),
+        el("td", { class: "flagcell" }, flagEls(d)),
+        el("td", null, el("span", { class: "st st-" + (it.status || "후보"), text: it.status || "후보" })),
+        el("td", null, el("div", { class: "memo-cell", text: it.memo || "" })));
+      tr.addEventListener("click", () => openDetail(it.id));
+      rows.append(tr);
+      const cb2 = cb.cloneNode(); cb2.checked = cb.checked;
+      cb2.addEventListener("click", (e) => e.stopPropagation());
+      cb2.addEventListener("change", () => { if (cb2.checked) S.sel.add(it.id); else S.sel.delete(it.id); render(); });
+      // 폰 카드(2026-11-12 다시 정리): 이름 + 한 줄 위치 → 숫자 세 칸 → 한 줄 보조 → 상태와 «걸리는 점»만 → 최근 의견
+      const dl = dateLine(it), nk = newKind(it), nc = newCmts(it.id).length;
+      const meta = [(it.kind || "매물") + " · " + (it.deal || "–"), (it.station || "") + (n(it.walkMin) != null ? " 도보 " + n(it.walkMin) + "분" : ""), it.agent || ""].filter((s) => s.trim());
+      const probs = d.flags.filter((f) => f[0] !== "ok");
+      const card = el("article", { class: "card" + (nk === "new" ? " is-new" : ""), style: "animation-delay:" + Math.min(i, 12) * 0.04 + "s" },
+        el("div", { class: "top" },
+          el("div", { class: "ttl" },
+            el("div", { class: "name" }, ...rankEls(it), dispName(it)),
+            it.alias && it.name ? el("div", { class: "aka", text: it.name }) : null,
+            el("div", { class: "meta" }, d.isNear ? el("span", { class: "star", text: "★ " }) : null, meta.join(" · ")),
+            distText(it) ? el("div", { class: "meta dist" + (distText(it) === "위치 미확인" ? " unk" : "") }, pinSvg(), distText(it)) : null),
+          el("label", { class: "cmpchk", title: "나란히 보기" }, cb2, el("span", { text: "비교" }))),
+        el("div", { class: "kp" },
+          el("div", null, el("span", { text: "전용·방" }), el("strong", { text: (d.area == null ? "–" : fmt(py(d.area), 1) + "평") + "·방" + (d.rooms == null ? "–" : d.rooms) }), d.area == null ? null : el("span", { class: "m2", text: "(" + fmt(d.area, 1) + "㎡)" })),
+          el("div", { class: "dep" }, el("span", { text: "보증금" }), el("strong", { text: won(d.dep) })),
+          el("div", { class: "big", title: d.monthly == null ? "" : "이자 " + fmt(d.interest, 1) + " 포함" }, el("span", { text: "월 부담" }), el("strong", { text: d.monthly == null ? "–" : fmt(d.monthly, 0) }))),
+        el("div", { class: "sub" }, [d.rent ? "월세 " + fmt(d.rent, 1) : "", it.mgmt !== "" && it.mgmt != null ? "관리비 " + fmt(d.mgmt, 1) : "", dl !== "–" ? dl : ""].filter(Boolean).join(" · ")),
+        el("div", { class: "flags" },
+          el("span", { class: "st st-" + (it.status || "후보"), text: it.status || "후보" }),
+          nk === "new" ? el("span", { class: "f new", text: "새 집" }) : nk === "upd" ? el("span", { class: "f upd", text: "고침" }) : null,
+          nc ? el("span", { class: "f newcmt", text: "새 의견 " + nc }) : null,
+          it.fill === "대기" ? el("span", { class: "f unk", text: "자동 정리 정리 대기" }) : null,
+          vidCount(it) ? el("span", { class: "f vid", text: "▶ 영상 " + vidCount(it) }) : null,
+          ...tagEls(it.id),
+          ...(probs.length ? probs.map((f) => el("span", { class: "f " + f[0], text: f[1] })) : [el("span", { class: "f ok", text: "조건 다 맞음" })])),
+        lastCmtEl(it.id));
+      card.addEventListener("click", () => openDetail(it.id));
+      cards.append(card);
+    });
+    const eb = $("emptyBox");
+    if (!EMPTY_HTML) EMPTY_HTML = eb.innerHTML;
+    if (qTerms().length && list.length === 0) {
+      const all = qHitsElsewhere();
+      const kids = [el("p", null, el("b", { text: "«" + S.q.trim() + "»에 맞는 집이 없어요." })),
+        el("p", { class: "small", text: all ? "다른 필터(상태·종류·우선순위·의견 태그·새 것만)에 가려진 집이 " + all + "곳 있어요." : "띄어쓰기·맞춤법을 바꿔 보거나 낱말을 줄여 보세요." })];
+      if (all) { const b = el("button", { type: "button", class: "btn", text: "필터 다 풀고 찾기" }); b.addEventListener("click", resetFiltersKeepQ); kids.push(b); }
+      const c = el("button", { type: "button", class: "btn ghost", text: "찾는 말 지우기" }); c.addEventListener("click", () => setQ("")); kids.push(c);
+      eb.replaceChildren(...kids);
+    } else if (eb.dataset.mode !== "base") { eb.innerHTML = EMPTY_HTML; }
+    eb.dataset.mode = qTerms().length && list.length === 0 ? "q" : "base";
+    eb.hidden = !(S.loaded && list.length === 0) || MAPV.on;
+    renderCompare();
+    if (MAPV.on) renderMap();
+  }
+
+  /* ---------- 위치·지도 (2026-11-13) ----------
+   * 좌표는 백엔드가 카카오 로컬로 구해 list 응답의 geo(id → {lat,lng,q})·ref(기준 장소)로 준다. 시트에는 없다.
+   * q: 정확(번지·도로명까지) / 대략(동까지만, 점선 핀·«약») / 없음(못 찾음). 거리는 직선거리(하버사인).
+   */
+  const GEO = { loaded: false, at: {}, ref: null, err: null };
+  function distM(a, b) {
+    const R = 6371000, r = Math.PI / 180, dLa = (b.lat - a.lat) * r, dLo = (b.lng - a.lng) * r;
+    const h = Math.sin(dLa / 2) ** 2 + Math.cos(a.lat * r) * Math.cos(b.lat * r) * Math.sin(dLo / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(h));
+  }
+  const geoOf = (it) => { const g = GEO.at[it.id]; return g && g.lat != null ? g : null; };
+  const distOf = (it) => { const g = geoOf(it); return g && GEO.ref ? distM(g, GEO.ref) : null; };
+  const fmtDist = (m) => m < 1000 ? Math.round(m / 10) * 10 + "m" : (m / 1000).toFixed(1) + "km";
+  function distText(it) {
+    if (!GEO.loaded) return "";
+    const g = geoOf(it), m = distOf(it);
+    if (!g) return GEO.err ? "" : "위치 미확인"; // 위치 서비스 오류면 «위치 미확인»을 붙이지 않는다(번지 없음과 구분)
+    if (m == null) return "";
+    return GEO.ref.name + " 직선 " + (g.q === "대략" ? "약 " : "") + fmtDist(m);
+  }
+  const pinSvg = () => { const s = document.createElementNS("http://www.w3.org/2000/svg", "svg"); s.setAttribute("viewBox", "0 0 24 24"); s.setAttribute("aria-hidden", "true"); s.setAttribute("class", "pin-ic"); s.innerHTML = '<path d="M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0 1 13 0c0 5.4-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.3"/>'; return s; };
+  // 카카오맵 링크(키 없이 여는 주소): 위치 보기 + 기준 장소까지 걸어서 길찾기. 좌표가 없으면 주소로 찾기.
+  function mapLinks(it) {
+    const g = geoOf(it), nm = String(dispName(it)).replace(/[,/]/g, " ").slice(0, 30);
+    const a = (href, text) => el("a", { href: href, target: "_blank", rel: "noopener", text: text });
+    if (g) {
+      const out = [a("https://map.kakao.com/link/map/" + encodeURIComponent(nm) + "," + g.lat + "," + g.lng, "카카오맵 ↗")];
+      if (GEO.ref) out.push(a("https://map.kakao.com/link/by/walk/" + encodeURIComponent(nm) + "," + g.lat + "," + g.lng + "/" + encodeURIComponent(GEO.ref.name) + "," + GEO.ref.lat + "," + GEO.ref.lng, GEO.ref.name + "까지 걸어서 ↗"));
+      return out;
+    }
+    return it.address ? [a("https://map.kakao.com/link/search/" + encodeURIComponent(String(it.address).replace(/\([^)]*\)/g, " ").trim()), "카카오맵에서 찾기 ↗")] : [];
+  }
+
+  // 지도 보기: Leaflet(레포 vendor/leaflet, 처음 지도를 열 때만 불러옴) + OpenStreetMap 지도 그림
+  const MAPV = { on: false, map: null, layer: null, loading: null, fitted: false, key: "" };
+  function loadLeaflet() {
+    if (window.L) return Promise.resolve();
+    if (MAPV.loading) return MAPV.loading;
+    MAPV.loading = new Promise((ok, no) => {
+      document.head.append(el("link", { rel: "stylesheet", href: "../vendor/leaflet/leaflet.css" }));
+      const s = el("script", { src: "../vendor/leaflet/leaflet.js" });
+      s.onload = ok; s.onerror = () => { MAPV.loading = null; no(new Error("leaflet")); };
+      document.head.append(s);
+    });
+    return MAPV.loading;
+  }
+  function setView(v) {
+    MAPV.on = v === "map";
+    document.querySelectorAll("[data-view]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.view === v)));
+    $("mapWrap").hidden = !MAPV.on;
+    document.querySelector(".wrap").classList.toggle("view-map", MAPV.on);
+    lsSet("hhmy_view", v);
+    render();
+  }
+  // near: 처음 열 때는 기준 장소 4km 안 핀만 맞춘다(멀리 있는 공고 하나 때문에 동네가 작게 보이지 않게). «모두 보이게»는 전부.
+  function fitAll(near) {
+    let pts = [];
+    MAPV.layer.eachLayer((m) => { if (m.getLatLng) pts.push(m.getLatLng()); });
+    if (near && GEO.ref) { const c = pts.filter((p) => distM({ lat: p.lat, lng: p.lng }, GEO.ref) < 4000); if (c.length > 1) pts = c; }
+    if (pts.length > 1) MAPV.map.fitBounds(pts, { padding: [32, 32], maxZoom: 16 });
+    else if (pts.length) MAPV.map.setView(pts[0], 15);
+  }
+  function pinPopup(group) {
+    const box = el("div", { class: "pin-pop" });
+    group.forEach(({ it, d }) => {
+      box.append(el("div", { class: "pp" },
+        el("div", { class: "name" }, ...rankEls(it), dispName(it)),
+        el("div", { class: "small muted", text: [(it.kind || "매물") + " · " + (it.deal || "–"), it.status || "후보", distText(it)].filter(Boolean).join(" · ") }),
+        el("div", { class: "small num", text: "보증금 " + won(d.dep) + " · 월 부담 " + (d.monthly == null ? "–" : fmt(d.monthly, 0)) + " · " + areaTxt(d.area) }),
+        el("button", { class: "btn", type: "button", text: "자세히 보기", onclick: () => openDetail(it.id) })));
+    });
+    return box;
+  }
+  async function renderMap() {
+    const note = $("mapNote");
+    try { await loadLeaflet(); }
+    catch (e) { note.textContent = "지도 그림을 불러오지 못했어요. 인터넷 연결을 확인하고 새로고침해 주세요."; return; }
+    if (!MAPV.on) return;
+    if (!MAPV.map) {
+      MAPV.map = L.map("mapBox", { zoomControl: true }).setView([37.5665, 126.978], 12);
+      L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a>' }).addTo(MAPV.map);
+      MAPV.layer = L.layerGroup().addTo(MAPV.map);
+    }
+    setTimeout(() => MAPV.map && MAPV.map.invalidateSize(), 0);
+    const list = visibleItems();
+    // 같은 자리(같은 단지 다른 형)는 핀 하나에 묶는다
+    const groups = new Map(); let miss = 0, rough = 0;
+    list.forEach((x) => { const g = geoOf(x.it); if (!g) { miss++; return; } if (g.q === "대략") rough++; const k = g.lat.toFixed(5) + "," + g.lng.toFixed(5); if (!groups.has(k)) groups.set(k, []); groups.get(k).push(x); });
+    const key = JSON.stringify([[...groups.keys()], list.map((x) => [x.it.id, x.it.status, x.d.hardFail, x.it.alias, x.it.rank, x.it.updatedAt]), GEO.ref]);
+    const shown = list.length - miss;
+    note.textContent = !GEO.loaded ? "위치 정보를 아직 받지 못했어요. 잠시 뒤 새로고침해 주세요."
+      : GEO.err && !shown ? "위치 검색(OpenStreetMap)에 연결하지 못했어요(" + GEO.err + "). 잠시 뒤 새로고침해 주세요."
+      : shown + "곳을 지도에 표시했어요" + (miss ? " · 위치 미확인 " + miss + "곳" + (GEO.err ? "(위치 서비스 오류 " + GEO.err + ", 잠시 뒤 다시 시도)" : "(주소가 없거나 찾지 못했어요. 도로명 주소로 고쳐 보세요)") : "") + (rough ? " · 점선 핀 " + rough + "곳은 동까지만 맞는 대략 위치예요" : "") + ". 거리는 직선거리예요.";
+    if (key === MAPV.key) return; // 30초마다 새로 읽어도 바뀐 게 없으면 핀을 다시 그리지 않는다(열린 창 유지)
+    MAPV.key = key;
+    MAPV.layer.clearLayers();
+    const cs = getComputedStyle(document.documentElement), cv = (v) => cs.getPropertyValue(v).trim();
+    if (GEO.ref) {
+      L.circleMarker([GEO.ref.lat, GEO.ref.lng], { radius: 7, color: cv("--ink"), weight: 3, fillColor: cv("--surface"), fillOpacity: 1, className: "pin pin-ref" })
+        .bindTooltip(GEO.ref.name, { permanent: true, direction: "top", offset: [0, -6], className: "pin-tip" }).addTo(MAPV.layer);
+    }
+    let i = 0;
+    groups.forEach((grp) => {
+      const g = geoOf(grp[0].it), live = grp.filter((x) => x.it.status !== "탈락"), dead = !live.length;
+      const top = live[0] || grp[0];
+      const color = dead ? cv("--sub") : top.d.hardFail ? cv("--warn") : cv("--accent");
+      const m = L.circleMarker([g.lat, g.lng], {
+        radius: dead ? 6 : 9, color: color, weight: 2, opacity: dead ? 0.55 : 1, dashArray: g.q === "대략" ? "4 3" : null,
+        fillColor: color, fillOpacity: dead ? 0.2 : g.q === "대략" ? 0.35 : 0.8, className: "pin" + (dead ? " pin-dead" : ""),
+      });
+      m.bindPopup(pinPopup(grp), { maxWidth: 260, autoPanPadding: [16, 16] });
+      m.bindTooltip(grp.length > 1 ? dispName(top.it) + " 외 " + (grp.length - 1) : dispName(top.it), { direction: "top", offset: [0, -8] });
+      m.addTo(MAPV.layer);
+      const p = m.getElement && m.getElement(); if (p) p.style.animationDelay = Math.min(i++, 12) * 0.03 + "s";
+    });
+    if (!MAPV.fitted && groups.size) { MAPV.fitted = true; fitAll(true); }
+  }
+  document.querySelectorAll("[data-view]").forEach((b) => b.addEventListener("click", () => setView(b.dataset.view)));
+  $("btnFitMap").addEventListener("click", () => { if (MAPV.map) fitAll(); });
+  if (lsGet("hhmy_view") === "map") setView("map"); // 지난번에 지도로 봤으면 지도로 연다(기기별)
+
+  function renderCompare() {
+    const picked = S.items.filter((it) => S.sel.has(it.id));
+    const box = $("compareBox");
+    if (picked.length < 2) { box.hidden = true; $("cmpCount").textContent = ""; if (picked.length === 1) toastOnce(); return; }
+    box.hidden = false;
+    $("cmpCount").textContent = picked.length + "곳";
+    const ds = picked.map((it) => ({ it, d: derive(it) }));
+    const metrics = [
+      ["전용면적", (x) => x.d.area, "max", (v) => areaTxt(v)],
+      ["방", (x) => x.d.rooms, "max", (v) => fmt(v)],
+      ["보증금", (x) => x.d.dep, "min", (v) => won(v)],
+      ["필요한 대출", (x) => x.d.loan, "min", (v) => won(v)],
+      ["월세+관리비", (x) => x.d.dep == null ? null : x.d.rent + x.d.mgmt, "min", (v) => fmt(v, 1)],
+      ["월 부담(이자 포함)", (x) => x.d.monthly, "min", (v) => fmt(v, 0)],
+      ["역까지", (x) => n(x.it.walkMin), "min", (v) => fmt(v) + "분"],
+    ];
+    const grid = $("compareGrid"); grid.replaceChildren();
+    ds.forEach((x) => {
+      const col = el("div", { class: "cmp-col" }, el("h3", { text: dispName(x.it) }), el("div", { class: "small muted", style: "margin-bottom:6px", text: (x.it.kind || "매물") + " · " + (x.it.deal || "") + " · " + (x.it.station || "") }));
+      metrics.forEach(([label, get, dir, show]) => {
+        const v = get(x); const vals = ds.map(get).filter((t) => t != null);
+        const allSame = vals.every((t) => t === vals[0]);
+        const best = v != null && vals.length > 1 && !allSame && v === (dir === "max" ? Math.max(...vals) : Math.min(...vals));
+        col.append(el("div", { class: "cmp-row" }, el("span", { class: "muted", text: label }), el("span", { class: "num" + (best ? " best" : ""), text: v == null ? "–" : show(v) })));
+      });
+      col.append(el("div", { class: "cmp-row" }, el("span", { class: "muted", text: "주차" }), el("span", { text: x.it.parking || "미확인" })));
+      col.append(el("div", { class: "cmp-row" }, el("span", { class: "muted", text: "순위·우선순위" }), el("span", { text: (n(x.it.rank) ? n(x.it.rank) + "위" : "–") + " · " + (x.it.priority || "미정") })));
+      col.append(el("div", { class: "cmp-row" }, el("span", { class: "muted", text: "중개사" }), el("span", { class: "small", text: x.it.agent || "–" })));
+      col.append(el("div", { class: "cmp-row" }, el("span", { class: "muted", text: "입주·마감" }), el("span", { class: "small", text: dateLine(x.it) })));
+      col.append(el("div", { style: "margin-top:6px" }, flagEls(x.d)));
+      grid.append(col);
+    });
+  }
+  let toasted = false; function toastOnce() { if (!toasted) { toasted = true; toast("한 곳 더 고르면 나란히 비교해요"); } }
+
+  /* ---------- 상세 ---------- */
+  function openSheet(id) { const s = $(id); s.hidden = false; const f = s.querySelector("input,select,textarea,button"); if (f) setTimeout(() => f.focus(), 30); }
+  function closeSheets(force) {
+    // 입력 창에서 동영상을 올리는 중이면 한 번 묻는다(실수로 닫아 긴 올리기가 날아가지 않게). 저장 중이면 닫지 않는다
+    if (!$("formSheet").hidden && force !== true) {
+      if (S.saving) { toast("저장하는 중이에요. 잠깐만 기다려 주세요"); return; }
+      if (S.vUp.some((j) => j.state === "up")) { askCloseUploading(); return; }
+      discardVideoJobs();
+    }
+    for (const id of ["detailSheet", "formSheet", "condSheet", "agentSheet"]) $(id).hidden = true;
+  }
+  function askCloseUploading() {
+    const acts = $("itemForm").querySelector(".actions.full");
+    if (acts.querySelector(".confirm")) return;
+    const yes = el("button", { class: "btn danger", type: "button", text: "취소하고 닫기" });
+    const no = el("button", { class: "btn ghost", type: "button", text: "계속 올리기" });
+    const box = el("div", { class: "confirm" }, "동영상을 올리는 중이에요. 닫으면 올리던 영상은 취소돼요.", yes, no);
+    no.addEventListener("click", () => box.remove());
+    yes.addEventListener("click", () => { box.remove(); discardVideoJobs(); closeSheets(true); });
+    acts.append(box);
+  }
+  document.querySelectorAll("[data-close]").forEach((b) => b.addEventListener("click", closeSheets));
+  document.querySelectorAll(".sheet").forEach((s) => s.addEventListener("click", (e) => { if (e.target === s) closeSheets(); }));
+  document.addEventListener("keydown", (e) => {
+    if (!$("photoViewer").hidden) { if (e.key === "Escape") closeViewer(); else if (e.key === "ArrowLeft") pvGo(PV.i - 1); else if (e.key === "ArrowRight") pvGo(PV.i + 1); return; }
+    if (e.key === "Escape") closeSheets();
+  });
+
+  /* ---------- 사진 넘겨 보기 ---------- */
+  const PV = { list: [], i: 0, back: null };
+  function pvMark() {
+    const n = PV.list.length; $("pvCount").textContent = (PV.i + 1) + " / " + n;
+    $("pvPrev").disabled = PV.i <= 0; $("pvNext").disabled = PV.i >= n - 1;
+    $("pvDots").querySelectorAll("i").forEach((d, k) => d.classList.toggle("on", k === PV.i));
+  }
+  function pvGo(i, instant) {
+    const t = $("pvTrack"); i = Math.max(0, Math.min(PV.list.length - 1, i));
+    const smooth = !instant && !matchMedia("(prefers-reduced-motion: reduce)").matches;
+    t.scrollTo({ left: i * t.clientWidth, behavior: smooth ? "smooth" : "auto" }); PV.i = i; pvMark();
+  }
+  function openViewer(list, start, alt) {
+    if (!list.length) return;
+    PV.list = list; PV.back = document.activeElement;
+    const t = $("pvTrack"); t.replaceChildren(); $("pvDots").replaceChildren();
+    list.forEach((p, k) => { t.append(el("div", { class: "pv-slide" }, el("img", { src: p.src, alt: alt + " " + (k + 1) + "/" + list.length, draggable: "false" }))); if (list.length > 1) $("pvDots").append(el("i")); });
+    $("pvPrev").hidden = $("pvNext").hidden = list.length < 2;
+    $("photoViewer").hidden = false; document.body.style.overflow = "hidden";
+    pvGo(start, true); $("pvClose").focus();
+  }
+  function closeViewer() { $("photoViewer").hidden = true; document.body.style.overflow = ""; if (PV.back && PV.back.focus) PV.back.focus(); }
+  $("pvClose").addEventListener("click", closeViewer);
+  $("pvPrev").addEventListener("click", () => pvGo(PV.i - 1));
+  $("pvNext").addEventListener("click", () => pvGo(PV.i + 1));
+  $("pvTrack").addEventListener("click", (e) => { if (e.target.classList.contains("pv-slide")) closeViewer(); });
+  function pvSync() { const t = $("pvTrack"); const i = Math.round(t.scrollLeft / Math.max(1, t.clientWidth)); if (i !== PV.i) { PV.i = i; pvMark(); } }
+  $("pvTrack").addEventListener("scroll", pvSync, { passive: true });
+  $("pvTrack").addEventListener("scrollend", pvSync);
+  window.addEventListener("resize", () => { if (!$("photoViewer").hidden) pvGo(PV.i, true); });
+
+  function openDetail(id) {
+    const it = S.items.find((x) => x.id === id); if (!it) return;
+    const d = derive(it);
+    $("dTitle").textContent = dispName(it);
+    const body = $("dBody"); body.replaceChildren();
+    const photos = Array.isArray(it.photos) ? it.photos : [];
+    if (photos.length) {
+      const g = el("div", { class: "gallery" });
+      const pics = photos.map((p) => ({ src: imgSrc(typeof p === "string" ? p : p.id), pdf: isPdfId(p) }));
+      const imgs = pics.filter((x) => !x.pdf);
+      pics.forEach((p, i) => { g.append(p.pdf ? el("a", { href: p.src, target: "_blank", rel: "noopener" }, el("div", { class: "thumb" }, el("div", { class: "pdf", text: "PDF 열기" }))) : el("button", { type: "button", class: "ph", "aria-label": "사진 크게 보기", onclick: () => openViewer(imgs, pics.slice(0, i).filter((x) => !x.pdf).length, (it.name || "") + " 사진") }, el("img", { src: p.src, alt: (it.name || "") + " 사진", loading: "lazy" }))); });
+      if (imgs.length > 1) g.append(el("div", { class: "more", text: "사진을 누르면 크게 보고 옆으로 넘길 수 있어요" }));
+      body.append(g);
+    }
+    if (vidCount(it)) body.append(videoBlock(it));
+    const link = safeUrl(it.link || "");
+    const kv = el("div", { class: "kv" },
+      ...(it.alias ? [el("div", { text: "정식 이름" }), el("div", { text: it.name || "–" })] : []),
+      el("div", { text: "종류" }), el("div", { text: (it.kind || "매물") + " · " + (it.deal || "–") + (it.source === "자동 정리" ? " · 자동 정리 검색" : "") + (it.fill === "대기" ? " · 자동 정리 정리 대기(매일 아침)" : it.fill === "완료" ? " · 자동 정리가 빈 칸 채움" : it.fill === "못함" ? " · 자동 정리가 링크를 못 열었어요(메모 참고)" : "") }),
+      el("div", { text: "위치" }), el("div", { text: (it.station || "–") + (n(it.walkMin) != null ? " · 도보 " + n(it.walkMin) + "분" : "") + (it.address ? " · " + it.address : "") }),
+      ...(distText(it) || mapLinks(it).length ? [el("div", { text: "지도" }), el("div", { class: "maplinks" }, distText(it) ? el("span", { text: distText(it) }) : null, ...mapLinks(it))] : []),
+      el("div", { text: "전용·방" }), el("div", { class: "num", text: areaTxt(d.area, 2) + " · 방 " + (d.rooms ?? "–") + (it.baths ? " · 욕실 " + it.baths : "") }),
+      el("div", { text: "보증금" }), el("div", { class: "num", text: won(d.dep) + (d.loan ? " (대출 필요 " + won(d.loan) + ")" : "") }),
+      el("div", { text: "월세·관리비" }), el("div", { class: "num", text: fmt(d.rent, 1) + " · " + fmt(d.mgmt, 1) + (d.pfee ? " · 주차 " + fmt(d.pfee, 1) : "") }),
+      el("div", { text: "월 부담" }), el("div", { class: "num" }, el("b", { text: d.monthly == null ? "–" : fmt(d.monthly, 0) }), !d.interest ? "" : " (이자 " + fmt(d.interest, 1) + " 포함)"),
+      el("div", { text: "주차" }), el("div", { text: it.parking || "미확인" }),
+      el("div", { text: "입주·마감" }), el("div", { text: dateLine(it) }),
+      ...(S.canWrite && S.db ? [] : [el("div", { text: "상태" }), el("div", null, el("span", { class: "st st-" + (it.status || "후보"), text: it.status || "후보" })),
+        el("div", { text: "순위" }), el("div", { text: (n(it.rank) ? n(it.rank) + "위" : "–") + " · 우선순위 " + (it.priority || "미정") })]),
+      el("div", { text: "링크" }), el("div", null, link ? el("a", { href: link, target: "_blank", rel: "noopener", text: "열기 ↗" }) : el("span", { class: "muted", text: "없음" })));
+    const orgBox = el("section", { class: "org" }); // 상태·우선순위·순위: 고칠 수 있으면 위쪽에 이름표 달고 모아 둔다
+    body.append(orgBox, kv, flagEls(d));
+    if (it.agent) body.append(agentBlock(it));
+    if (it.memo) body.append(el("p", { style: "white-space:pre-wrap", text: it.memo }));
+    if (it.createdAt) body.append(el("p", { class: "small muted", text: "올린 날 " + String(it.createdAt).slice(0, 10) + (it.updatedAt ? " · 고친 날 " + String(it.updatedAt).slice(0, 10) : "") }));
+    if (S.db) body.append(buildThread(it.id));
+    if (S.canWrite && S.db) {
+      const statusSel = el("select", { "aria-label": "상태 바꾸기", class: "btn" }, ...["후보", "신청함", "탈락"].map((s) => { const o = el("option", { text: s }); if ((it.status || "후보") === s) o.selected = true; return o; }));
+      statusSel.addEventListener("change", async () => { try { await S.db.doc("listings/" + it.id).update({ status: statusSel.value, updatedAt: new Date().toISOString() }); toast("상태를 «" + statusSel.value + "»로 바꿨어요"); } catch (e) { toast("저장하지 못했어요: " + (e && e.code || "오류")); } });
+      const edit = el("button", { class: "btn", type: "button", text: "고치기", onclick: () => openForm(it.id) });
+      const del = el("button", { class: "btn danger", type: "button", text: "지우기" });
+      const priSelEl = el("select", { "aria-label": "우선순위 바꾸기", class: "btn" }, ...["", "최우선", "높음", "보통", "낮음"].map((p) => { const o = el("option", { text: p || "우선순위 미정", value: p }); if ((it.priority || "") === p) o.selected = true; return o; }));
+      priSelEl.addEventListener("change", async () => { try { await S.db.doc("listings/" + it.id).update({ priority: priSelEl.value, updatedAt: new Date().toISOString() }); toast("우선순위를 «" + (priSelEl.value || "미정") + "»로 바꿨어요"); } catch (e) { toast("저장하지 못했어요: " + (e && e.code || "오류")); } });
+      const rankIn = el("input", { type: "number", min: "1", step: "1", inputmode: "numeric", "aria-label": "내 순위", placeholder: "순위", class: "btn", style: "width:5.5em" });
+      rankIn.value = n(it.rank) || "";
+      rankIn.addEventListener("change", async () => { const v = n(rankIn.value); try { await S.db.doc("listings/" + it.id).update({ rank: v, updatedAt: new Date().toISOString() }); toast(v ? "순위를 " + v + "위로 적었어요" : "순위를 비웠어요"); } catch (e) { toast("저장하지 못했어요: " + (e && e.code || "오류")); } });
+      const lab = (t, c) => el("label", { class: "orgf" }, el("span", { text: t }), c);
+      statusSel.className = rankIn.className = priSelEl.className = "";
+      orgBox.append(lab("상태", statusSel), lab("우선순위", priSelEl), lab("내 순위", rankIn));
+      rankIn.style.width = "";
+      const actions = el("div", { class: "actions endacts" }, edit, del);
+      del.addEventListener("click", () => {
+        if (actions.querySelector(".confirm")) return;
+        const yes = el("button", { class: "btn danger", type: "button", text: "네, 지울게요" });
+        const no = el("button", { class: "btn ghost", type: "button", text: "그대로 두기" });
+        const box = el("div", { class: "confirm" }, "«" + (it.name || "") + "»과 올린 사진" + (vidCount(it) ? "·동영상(드라이브 휴지통으로, 30일 안엔 드라이브에서 되살릴 수 있음)" : "") + "을 지울까요? 되돌릴 수 없어요. 지운 집은 정기 검색이 다시 올리지 않아요. 나중에 다시 볼 수도 있으면 «탈락»으로 바꾸세요.", yes, no);
+        no.addEventListener("click", () => box.remove());
+        yes.addEventListener("click", async () => {
+          yes.disabled = true;
+          try {
+            /* 지운 집을 기록해 두면 정기 검색이 같은 집을 다시 넣지 않는다 */
+            await S.db.doc("dismissed/" + it.id).set({ name: it.name || "", link: it.link || "", station: it.station || "", address: it.address || "", dismissedAt: new Date().toISOString() });
+            await S.db.doc("listings/" + it.id).delete();
+            if (S.assets) for (const p of photos) { try { await S.assets.delete(typeof p === "string" ? p : p.id); } catch (e) { /* 사진이 이미 없으면 넘어감 */ } }
+            for (const v of (Array.isArray(it.videos) ? it.videos : [])) { try { await call("videoTrash", { id: v.id }); } catch (e) { /* 이미 없으면 넘어감 */ } }
+            S.sel.delete(it.id); closeSheets(); toast("지웠어요");
+          } catch (e) { yes.disabled = false; toast("지우지 못했어요: " + (e && e.code || "오류")); }
+        });
+        actions.append(box);
+      });
+      body.append(actions);
+    }
+    openSheet("detailSheet");
+  }
+
+  /* ---------- 빠른 입력: 링크·공유 글에서 값 읽기 (2026-11-12) ---------- */
+  const QUICK_HINT = $("quickMsg").textContent;
+  // «2억 5,000» «2.5억» «25,000» → 만 원
+  function manwon(s) {
+    s = String(s || "").replace(/\s+/g, "");
+    const m = s.match(/^([0-9.]+)억([0-9,]*)(천)?(?:만)?원?$/);
+    if (m) return Math.round(parseFloat(m[1]) * 10000 + (m[2] ? (Number(m[2].replace(/,/g, "")) || 0) * (m[3] ? 1000 : 1) : 0));
+    const c = s.match(/^([0-9.]+)천(?:만)?원?$/);
+    if (c) return Math.round(parseFloat(c[1]) * 1000);
+    const k = s.replace(/[,만원]/g, "");
+    return /^[0-9.]+$/.test(k) ? Number(k) : null;
+  }
+  const MONEY = "([0-9.]+\\s*억(?:\\s*[0-9][0-9,]{0,5}\\s*천?(?![0-9.,]*\\s*(?:㎡|m²|m2|평|층|제곱|호선|호|룸|동|개|대|년|천)))?|[0-9.]+\\s*천|[0-9][0-9,]*(?:\\.[0-9]+)?)\\s*(?:만\\s*원?|만)?";
+  function siteOf(url) {
+    let m;
+    if ((m = url.match(/land\.naver\.com\/[^\s]*?(?:articleNo=|articles\/|article\/info\/|article\/)(\d{6,})/))) return { site: "네이버", id: "naver-" + m[1] };
+    if (/naver\.(me|com)/.test(url)) return { site: "네이버", id: null };
+    if ((m = url.match(/daangn\.com\/[^\s?#]*?articles\/([A-Za-z0-9]+)/))) return { site: "당근", id: "daangn-" + m[1].toLowerCase() };
+    if (/daangn\.com/.test(url)) return { site: "당근", id: null };
+    if ((m = url.match(/dabangapp\.com\/[^\s]*?(?:room\/|detail_id=|[?&]id=)([0-9a-fA-F]{6,})/))) return { site: "다방", id: "dabang-" + m[1].toLowerCase() };
+    if (/dabang/.test(url)) return { site: "다방", id: null };
+    if ((m = url.match(/zigbang\.com\/[^\s]*?items\/(\d+)/))) return { site: "직방", id: "zigbang-" + m[1] };
+    if (/zigbang/.test(url)) return { site: "직방", id: null };
+    return { site: "", id: null };
+  }
+  function parseListing(raw) {
+    const t = String(raw || "").replace(/\u00a0/g, " ");
+    const o = {}, notes = [];
+    const url = (t.match(/https?:\/\/[^\s<>"\u3000]+/) || [])[0];
+    if (url) { o.link = url.replace(/[)\].,]+$/, ""); const s = siteOf(o.link); o.site = s.site; o.qid = s.id; }
+    const body = url ? t.replace(url, " ") : t;
+    let m;
+    // 네이버 부동산 매물 화면을 길게 눌러 복사한 글(2026-11-12): «매물번호 2659636958» «방수/욕실수 2/1개» «주차가능여부 가능»
+    const nvNo = body.match(/매물번호\s*:?\s*(\d{8,})/);
+    if (nvNo && (!url || o.site === "네이버")) { o.site = "네이버"; o.qid = "naver-" + nvNo[1]; if (!url) o.link = "https://fin.land.naver.com/articles/" + nvNo[1]; }
+    const nvRoom = body.match(/방수\s*\/\s*욕실수\s*:?\s*([1-6])\s*\/\s*([1-4])/);
+    const nvPark = body.match(/주차가능여부\s*:?\s*(가능|불가능|불가|없음|있음)/);
+    if ((m = body.match(/(20\d\d|19\d\d)\.(\d{2})\s*\((\d+)년차\)/))) notes.push(m[1] + "년 " + Number(m[2]) + "월 준공(" + m[3] + "년차)");
+    if ((m = body.match(/향\s*(?:\(거실\s*기준\))?\s*([동서남북]{1,2}향)/))) notes.push(m[1]);
+    if ((m = body.match(/확인매물\s*(20\d\d)\.\s*(\d{1,2})\.\s*(\d{1,2})/))) notes.push("네이버 확인 " + m[1] + "-" + m[2].padStart(2, "0") + "-" + m[3].padStart(2, "0"));
+    if ((m = body.match(/위반건축물\s*여부\s*:?\s*([^\n]+)/)) && !/해당\s*없음|아니/.test(m[1])) notes.push("⚠ 위반건축물 " + m[1].trim());
+    if (/반전세/.test(body)) o.deal = "반전세"; else if (/월세/.test(body)) o.deal = "월세"; else if (/전세/.test(body)) o.deal = "전세";
+    // 월세 «1,000/50», «월세 1억/30»
+    if ((m = body.match(new RegExp("(?:반전세|월세)\\s*:?\\s*" + MONEY + "\\s*\\/\\s*([0-9][0-9,.]*)")))) { o.deposit = manwon(m[1]); o.rent = manwon(m[2]); }
+    else if ((m = body.match(new RegExp("전세\\s*:?\\s*" + MONEY)))) { o.deposit = manwon(m[1]); o.rent = 0; }
+    if (o.deposit == null && (m = body.match(new RegExp("보증금\\s*:?\\s*" + MONEY)))) o.deposit = manwon(m[1]);
+    if (o.rent == null && (m = body.match(/월세\s*:?\s*([0-9][0-9,.]*)\s*(?:만\s*원?)?(?![0-9,.]*\s*\/)(?!\s*[0-9])/))) o.rent = manwon(m[1]);
+    if (/매매/.test(body) && !o.deal) o.sale = true;
+    if ((m = body.match(/관리비\s*:?\s*(?:월\s*)?([0-9][0-9,.]*)\s*(만\s*원?|만|원)?/))) { const v = Number(m[1].replace(/,/g, "")); if (isFinite(v)) o.mgmt = m[2] === "원" || v >= 1000 ? Math.round(v / 1000) / 10 : v; }
+    else if (/관리비\s*:?\s*없음/.test(body)) o.mgmt = 0;
+    // 면적: «전용 36.5㎡», «84/59㎡»(공급/전용), «전용 11평»
+    const U = "(?:㎡|m²|m2|제곱미터)";
+    if ((m = body.match(new RegExp("전용(?:면적)?\\s*:?\\s*([0-9.]+)\\s*" + U)))) o.area = Number(m[1]);
+    else if ((m = body.match(/전용(?:면적)?\s*:?\s*([0-9.]+)\s*평/))) o.area = Math.round(Number(m[1]) * 3.3058 * 10) / 10;
+    else if ((m = body.match(new RegExp("([0-9.]+)\\s*" + U + "?\\s*\\/\\s*([0-9.]+)\\s*" + U)))) o.area = Number(m[2]);
+    else if ((m = body.match(new RegExp("([0-9]+(?:\\.[0-9]+)?)\\s*" + U)))) { o.area = Number(m[1]); notes.push("면적이 공급인지 전용인지 확인"); }
+    if (nvRoom) { o.rooms = Number(nvRoom[1]); notes.push("욕실 " + nvRoom[2]); }
+    else if ((m = body.match(/방\s*(?:수|개수)?\s*:?\s*([1-6])\s*개?/))) o.rooms = Number(m[1]);
+    else if (/쓰리룸|방\s*3/.test(body)) o.rooms = 3; else if (/투룸|방\s*2/.test(body)) o.rooms = 2; else if (/원룸/.test(body)) o.rooms = 1;
+    if (!nvRoom && (m = body.match(/욕실\s*(?:수)?\s*:?\s*([1-4])/))) notes.push("욕실 " + m[1]);
+    if ((m = body.match(/(\d+|저|중|고)\s*\/\s*(\d+)\s*층/))) notes.push(m[1] + "/" + m[2] + "층");
+    if (nvPark) o.parking = /불가|없음/.test(nvPark[1]) ? "불가" : "가능";
+    else if ((m = body.match(/주차\s*:?\s*(가능|불가능|불가|있음|없음|O|X|o|x|\d+\s*대)/))) o.parking = /불가|없음|X|x/.test(m[1]) ? "불가" : "가능";
+    else if (/주차\s*(가능|됨)|세대당\s*[0-9.]+\s*대/.test(body)) o.parking = "가능";
+    if ((m = body.match(/입주\s*(?:가능)?\s*(?:일)?\s*:?\s*(20\d\d)[.\-\/년]\s*(\d{1,2})[.\-\/월]\s*(\d{1,2})/))) o.moveIn = m[1] + "-" + m[2].padStart(2, "0") + "-" + m[3].padStart(2, "0");
+    else if ((m = body.match(/입주\s*(?:가능)?\s*(?:일)?\s*:?\s*(즉시|협의)/))) notes.push("입주 " + m[1]);
+    const gu = body.match(/([가-힣]{1,4}구)\s+([가-힣0-9]{1,6}동)(?![가-힣])/);
+    const stn = body.match(/([가-힣]{2,8}역)(?![가-힣])/);
+    const dong = gu ? null : body.match(/(?:^|[\s\]),])([가-힣]{1,5}동)(?=[\s,.]|$)/);
+    if (stn) o.station = stn[1]; else if (gu) o.station = gu[1] + " " + gu[2]; else if (dong) o.station = dong[1];
+    if (/○○/.test(t)) o.nangok = true;
+    const where = gu ? gu[2] : stn ? stn[1] : dong ? dong[1] : "";
+    const TYP = /(아파트|오피스텔|빌라|다세대|연립|도시형생활주택|다가구|단독)/;
+    const line1 = (body.split(/\n/).find((x) => x.trim()) || "");
+    const typ = (line1.match(TYP) || body.match(TYP) || [])[1] || "";
+    const first = t.split(/\n/).map((x) => x.trim().replace(/^\[[^\]]{0,12}\]\s*/, "")).find((x) => x && !/^https?:/.test(x) && !/^\[?네이버|공유/.test(x) && !/^(기본 정보|알림|관심매물|보증금\/월세)/.test(x));
+    // 네이버 복사 글은 첫 줄이 «기본 정보»·숫자일 수 있어 첫 줄을 이름으로 쓰지 않는다
+    let nm = [where, typ].filter(Boolean).join(" ") || (first && !nvNo && !nvRoom ? first.slice(0, 24) : "");
+    if (o.deal && nm.indexOf(o.deal) < 0) nm = (nm + " " + o.deal).trim();
+    o.name = nm || (o.site ? o.site + " 매물" : "");
+    if (o.site) o.name += o.site && o.name.indexOf(o.site) < 0 ? " (" + o.site + ")" : "";
+    o.notes = notes;
+    return o;
+  }
+  function quickFill() {
+    const p = parseListing($("f_quick").value);
+    // 앞서 붙여넣은 다른 매물 값이 남지 않게: 지난번 자동으로 채운 값이 그대로면 비운다
+    for (const k in (S.autoVals || {})) { const f = $("f_" + k); if (f.value === S.autoVals[k]) { if (f.tagName === "SELECT") f.selectedIndex = 0; else f.value = ""; } }
+    S.autoVals = {};
+    const set = { name: p.name, deal: p.deal, station: p.station, area: p.area, rooms: p.rooms, deposit: p.deposit, rent: p.rent, mgmt: p.mgmt, parking: p.parking, movein: p.moveIn, link: p.link };
+    const got = [];
+    const LABEL = { name: "이름", deal: "거래", station: "동네", area: "면적", rooms: "방", deposit: "보증금", rent: "월세", mgmt: "관리비", parking: "주차", movein: "입주일", link: "링크" };
+    for (const k in set) {
+      const v = set[k]; if (v == null || v === "") continue;
+      const f = $("f_" + k);
+      const isDefault = f.tagName === "SELECT" && f.selectedIndex === 0;
+      if (f.value.trim() && !isDefault) continue; // 이미 적은 값은 그대로
+      if (f.tagName === "SELECT" && ![...f.options].some((o) => o.value === String(v))) continue;
+      f.value = String(v); got.push(LABEL[k]); S.autoVals[k] = f.value;
+      const box = f.closest(".field"); box.classList.remove("got"); void box.offsetWidth; box.classList.add("got");
+    }
+    if (p.notes.length) { const memo = $("f_memo"); const add = p.notes.filter((x) => memo.value.indexOf(x) < 0).join(" · "); if (add) memo.value = (memo.value ? memo.value + "\n" : "") + add; }
+    S.quickId = p.qid || null;
+    const dup = p.qid && S.items.find((x) => x.id === p.qid) || (p.link && S.items.find((x) => x.link && x.link === p.link));
+    let msg = got.length ? "채운 칸: " + got.join(", ") + "." : "읽을 수 있는 값이 없었어요.";
+    if (p.site === "네이버" && got.length < 4) msg += " 네이버는 링크만으로는 못 읽어요. 매물 화면을 «기본 정보»부터 «매물번호»까지 길게 눌러 복사해 붙여넣으면 칸이 채워져요.";
+    
+    if (p.sale) msg += " ⚠ 매매 글 같아요(거래 칸을 확인해 주세요).";
+    if (false) msg += " ⚠ ○○ 쪽은 빼기로 했던 동네예요.";
+    if (dup && !S.editing) msg += " ⚠ 이미 올린 집 같아요: " + dispName(dup);
+    $("quickMsg").textContent = msg;
+  }
+  $("btnQuick").addEventListener("click", quickFill);
+  $("f_quick").addEventListener("paste", () => setTimeout(quickFill, 0));
+
+  /* ---------- 동영상(2026-11-18, 주인 «직접 부동산에서 보러 다녀서 찍은 동영상») ----------
+   * 파일은 주인 구글 드라이브 «집 찾기 영상» 폴더, 시트 videos 칸엔 [{id, name, size, at, shared}]만.
+   * 올리기: 백엔드 videoStart가 드라이브 «이어 올리기» 주소를 주면 8MB씩 바로 보낸다(XHR, 진행률).
+   * 바로 보내기가 막히면(CORS) 4MB씩 백엔드 videoChunk에 맡겨 대신 보낸다. 다 오르면 videoDone이 «링크 있는 사람 보기»로.
+   * 고른 순간 올리기 시작, «저장»은 다 오를 때까지 기다렸다 저장, 저장 안 하고 닫으면 올린 것은 휴지통으로. */
+  const VID = { direct: true, CHUNK: 8 * 1024 * 1024, PCHUNK: 4 * 1024 * 1024 };
+  const vidCount = (it) => Array.isArray(it.videos) ? it.videos.length : 0;
+  const mb = (b) => b >= 1024 * 1024 * 1024 ? (b / 1073741824).toFixed(1) + "GB" : Math.max(1, Math.round(b / 1048576)) + "MB";
+  function videoBlock(it) {
+    const box = el("section", { class: "videos" }, el("h3", { text: "직접 찍은 동영상 " + it.videos.length }));
+    it.videos.forEach((v) => {
+      const card = el("div", { class: "vcard" });
+      const play = el("button", { type: "button", class: "vplay", "aria-label": "동영상 재생: " + (v.name || "") },
+        el("b", { text: "▶" }), el("span", { text: (v.name || "동영상") }));
+      play.addEventListener("click", () => {
+        // 누를 때만 드라이브 재생기를 불러온다(상세 창을 열 때마다 영상 여러 개를 받지 않게)
+        play.replaceWith(el("iframe", { src: "https://drive.google.com/file/d/" + encodeURIComponent(v.id) + "/preview", allow: "autoplay; fullscreen", allowfullscreen: "", title: v.name || "동영상" }));
+      });
+      if (v.shared === false) card.append(el("div", { class: "vfoot", text: "⚠ 드라이브 공유를 못 바꿔서 주인 계정으로 로그인한 기기에서만 재생돼요" }));
+      card.append(play, el("div", { class: "vfoot" },
+        el("span", { text: [v.at ? String(v.at).slice(0, 10) : "", v.size ? mb(v.size) : ""].filter(Boolean).join(" · ") }),
+        el("a", { href: "https://drive.google.com/file/d/" + encodeURIComponent(v.id) + "/view", target: "_blank", rel: "noopener", text: "드라이브에서 열기 ↗" })));
+      box.append(card);
+    });
+    box.append(el("p", { class: "small muted", text: "방금 올린 영상은 드라이브가 재생을 준비하느라 몇 분 걸릴 수 있어요. 안 나오면 «드라이브에서 열기»로 보세요." }));
+    return box;
+  }
+  // 올리기 일 하나: { file, state: up|done|fail, sent, rec, xhr, cancel, promise }
+  function addVideos(list) {
+    for (const f of list) {
+      if (!/^video\//.test(f.type || "") && !/\.(mp4|mov|m4v|webm|3gp|avi|mkv)$/i.test(f.name || "")) { toast("동영상 파일만 올릴 수 있어요"); continue; }
+      if (f.size > 2 * 1024 * 1024 * 1024) { toast("2GB보다 큰 동영상은 올릴 수 없어요. 잘라서 올려 주세요"); continue; }
+      const job = { file: f, state: "up", sent: 0, cancel: false };
+      job.promise = runVideo(job);
+      S.vUp.push(job);
+    }
+    drawVideos();
+  }
+  async function runVideo(job) {
+    const f = job.file, size = f.size;
+    try {
+      const s = await call("videoStart", { size: size, mime: f.type || "video/mp4", name: f.name || "video", itemName: $("f_alias").value.trim() || $("f_name").value.trim() });
+      job.url = s.url;
+      let start = 0, tries = 0;
+      while (!job.fileId) {
+        if (job.cancel) throw new Error("cancel");
+        let r;
+        try { r = VID.direct ? await putDirect(job, start) : await putProxy(job, start); tries = 0; }
+        catch (e) {
+          if (job.cancel) throw e;
+          if (VID.direct && e && e.blocked) { VID.direct = false; } // 브라우저가 드라이브에 바로 못 보냄 → 이제부터 백엔드가 대신
+          else if (++tries > 3) throw e;
+          r = { next: await proxyStatus(job) }; // 드라이브가 어디까지 받았는지 물어 그 뒤부터
+        }
+        if (r.fileId) job.fileId = r.fileId; else start = r.next;
+      }
+      const d = await call("videoDone", { id: job.fileId });
+      job.rec = { id: d.id, name: f.name || "동영상", size: size, at: new Date().toISOString(), shared: !!d.shared };
+      job.state = "done"; job.sent = size;
+      if (!d.shared) toast("드라이브 공유를 못 바꿔서, 주인 계정에서만 재생될 수 있어요");
+    } catch (e) {
+      if (job.cancel) return;
+      job.state = "fail"; job.err = e && e.message || "오류";
+    }
+    drawVideos();
+  }
+  function putDirect(job, start) {
+    return new Promise((resolve, reject) => {
+      const size = job.file.size, end = Math.min(start + VID.CHUNK, size);
+      const x = new XMLHttpRequest(); job.xhr = x;
+      x.open("PUT", job.url);
+      x.setRequestHeader("Content-Range", "bytes " + start + "-" + (end - 1) + "/" + size);
+      x.upload.onprogress = (e) => setSent(job, start + e.loaded);
+      x.onload = () => {
+        // 308: Range를 못 읽으면(CORS가 안 보여 줌) 끝까지 받았다고 짐작하지 않고 백엔드에 물어본다(제미나이 검토 2026-11-18)
+        if (x.status === 308) { const rg = x.getResponseHeader("Range"); if (rg) resolve({ next: Number(rg.split("-")[1]) + 1 }); else proxyStatus(job).then((nx) => resolve(job.fileId ? { fileId: job.fileId } : { next: nx }), reject); }
+        else if (x.status === 200 || x.status === 201) { try { resolve({ fileId: JSON.parse(x.responseText).id }); } catch (e) { reject(new Error("드라이브 답을 못 읽음")); } }
+        else reject(new Error("드라이브 " + x.status));
+      };
+      // 상태 0: 브라우저가 막음(CORS) 또는 연결 끊김. 첫 조각에서 막히면 바로 보내기를 접는다
+      x.onerror = () => { const e = new Error("연결이 끊겼어요"); e.blocked = start === 0 && !job.sent; reject(e); };
+      x.onabort = () => reject(new Error("cancel"));
+      x.send(job.file.slice(start, end));
+    });
+  }
+  function blobB64(b) { return new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(String(r.result).split(",")[1] || ""); r.onerror = () => rej(r.error); r.readAsDataURL(b); }); }
+  async function putProxy(job, start) {
+    const size = job.file.size, end = Math.min(start + VID.PCHUNK, size);
+    const data = await blobB64(job.file.slice(start, end));
+    if (job.cancel) throw new Error("cancel");
+    const j = await call("videoChunk", { url: job.url, start: start, total: size, data: data });
+    setSent(job, end);
+    return j.done ? { fileId: j.id } : { next: j.next || end };
+  }
+  async function proxyStatus(job) { const j = await call("videoChunk", { url: job.url, total: job.file.size, status: true }); if (j.done) { job.fileId = j.id; return job.file.size; } return j.next || 0; }
+  function setSent(job, b) {
+    job.sent = Math.max(job.sent, b);
+    const bar = job.bar; if (bar) bar.style.width = Math.min(100, job.sent / job.file.size * 100).toFixed(1) + "%";
+    if (job.lbl) job.lbl.textContent = "올리는 중 " + Math.floor(job.sent / job.file.size * 100) + "% · " + mb(job.sent) + " / " + mb(job.file.size);
+    if (S.saving) { const up = S.vUp.filter((j) => j.state === "up"); if (up.length) { const t = up.reduce((a, j) => a + j.file.size, 0), s = up.reduce((a, j) => a + j.sent, 0); $("btnSave").textContent = "동영상 올리는 중 " + Math.floor(s / t * 100) + "%"; } }
+  }
+  function cancelJob(job) { job.cancel = true; if (job.xhr) try { job.xhr.abort(); } catch (e) { /* 이미 끝남 */ } if (job.fileId || (job.rec && job.rec.id)) call("videoTrash", { id: job.fileId || job.rec.id }).catch(() => {}); }
+  function drawVideos() {
+    const box = $("vlist"); box.replaceChildren();
+    S.keepVideos.forEach((v, i) => box.append(el("div", { class: "vrow" },
+      el("div", { class: "vn", text: "▶ " + (v.name || "동영상") }),
+      el("div", { class: "vact" }, el("button", { type: "button", text: "빼기", onclick: () => { S.vRemoved.push(v.id); S.keepVideos.splice(i, 1); drawVideos(); } })),
+      el("div", { class: "vs", text: "올려 둔 영상" + (v.size ? " · " + mb(v.size) : "") + " · 빼고 저장하면 드라이브 휴지통으로" }))));
+    S.vUp.forEach((job) => {
+      const acts = el("div", { class: "vact" });
+      if (job.state === "fail") acts.append(el("button", { type: "button", text: "다시", onclick: () => { job.state = "up"; job.sent = 0; job.err = ""; job.fileId = null; job.cancel = false; job.promise = runVideo(job); drawVideos(); } }));
+      acts.append(el("button", { type: "button", text: job.state === "up" ? "취소" : "빼기", onclick: () => { cancelJob(job); S.vUp.splice(S.vUp.indexOf(job), 1); drawVideos(); } }));
+      job.bar = el("i"); job.lbl = el("div", { class: "vs" + (job.state === "fail" ? " fail" : "") });
+      job.lbl.textContent = job.state === "done" ? "다 올라갔어요 · " + mb(job.file.size) + " · «저장»을 눌러야 집에 붙어요" : job.state === "fail" ? "못 올렸어요(" + (job.err || "오류") + ") · «다시»를 눌러 보세요" : "올리는 중 " + Math.floor(job.sent / job.file.size * 100) + "% · " + mb(job.sent) + " / " + mb(job.file.size);
+      job.bar.style.width = (job.state === "done" ? 100 : job.sent / job.file.size * 100).toFixed(1) + "%";
+      box.append(el("div", { class: "vrow" }, el("div", { class: "vn", text: "▶ " + (job.file.name || "동영상") }), acts, job.state === "fail" ? null : el("div", { class: "vbar" }, job.bar), job.lbl));
+    });
+  }
+  // 입력 창을 저장 없이 닫을 때: 올리던 것은 멈추고, 다 올린 것도 집에 안 붙었으니 휴지통으로
+  function discardVideoJobs() { S.vUp.forEach(cancelJob); S.vUp = []; }
+  // 사진·PDF 저장소(2026-11-18, 주인 «사진이 안 올라가는디»): 동영상과 같은 드라이브 폴더·같은 올리기 길을 쓴다.
+  // 옛 아티팩트 저장소(S.assets)와 같은 모양(upload → {id, contentType}, delete(id))이라 입력 창·지우기 코드는 그대로 둔다.
+  const DRIVE_ASSETS = {
+    async upload(f) {
+      const job = { file: f, state: "up", sent: 0, cancel: false };
+      await runVideo(job);
+      if (job.state !== "done") { const e = new Error(job.err || "사진을 올리지 못했어요"); e.code = "사진 올리기 실패"; throw e; }
+      const pdf = f.type === "application/pdf";
+      return { id: (pdf ? "gdp:" : "gd:") + job.rec.id, contentType: f.type || "image/jpeg" };
+    },
+    async delete(pid) { const m = String(pid).match(/^gdp?:(.+)$/); if (m) await call("videoTrash", { id: m[1] }); }
+  };
+  $("btnPickVideo").addEventListener("click", () => $("f_videos").click());
+  $("f_videos").addEventListener("change", (e) => { addVideos([...e.target.files]); e.target.value = ""; });
+  const vdz = $("vDrop");
+  vdz.addEventListener("dragover", (e) => { e.preventDefault(); vdz.classList.add("on"); });
+  vdz.addEventListener("dragleave", () => vdz.classList.remove("on"));
+  vdz.addEventListener("drop", (e) => { e.preventDefault(); vdz.classList.remove("on"); addVideos([...e.dataTransfer.files]); });
+
+  /* ---------- 주소로 찾기(2026-11-18): 카카오 로컬로 건물 이름·가까운 역·걸어서 몇 분, 빈 칸에만 ---------- */
+  const ADDR_HINT = $("addrMsg").textContent;
+  async function addrFill() {
+    const a = $("f_address").value.trim(); if (!a) { $("f_address").focus(); toast("주소를 적어 주세요"); return; }
+    const b = $("btnAddr"); b.disabled = true; b.textContent = "찾는 중…";
+    try {
+      const r = await call("addrLookup", { address: a });
+      if (!r.found) { $("addrMsg").textContent = "이 주소를 못 찾았어요. 동 이름과 번지(예: ○○동 123-4)나 도로명으로 다시 적어 보세요."; return; }
+      const got = [];
+      const put = (id, v, label) => { const f = $(id); if (v == null || v === "" || f.value.trim()) return; f.value = String(v); got.push(label); const box = f.closest(".field"); box.classList.remove("got"); void box.offsetWidth; box.classList.add("got"); };
+      const full = r.road || r.jibun;
+      if (full && full !== a) { $("f_address").value = full + (r.building ? " (" + r.building + ")" : ""); got.push("정식 주소"); }
+      put("f_name", r.building ? (r.dong ? r.dong + " " : "") + r.building : "", "이름");
+      // 걸어서 분: 직선 거리 × 1.3(길 굽이) ÷ 분당 67m 어림
+      put("f_station", r.station || "", "가까운 역");
+      // 역 칸에 다른 동네·역이 적혀 있으면 도보 분은 그 역 것이 아니니 채우지 않는다(검토 2026-11-18)
+      if (r.stationM != null && $("f_station").value.trim() === (r.station || "")) put("f_walk", Math.max(1, Math.round(r.stationM * 1.3 / 67)), "걸어서 분(어림)");
+      $("addrMsg").textContent = (got.length ? "채운 칸: " + got.join(", ") + "." : "위치를 찾았어요.") + (r.station ? " " + r.station + "까지 직선 " + r.stationM + "m." : "") + (r.rough ? " ⚠ 동까지만 맞았어요(번지를 더 적으면 정확해져요)." : "") + (r.found ? " 저장하면 지도에 보여요." : "");
+    } catch (e) { $("addrMsg").textContent = "찾지 못했어요: " + (e && e.message || "오류"); }
+    finally { b.disabled = false; b.textContent = "주소로 찾기"; }
+  }
+  $("btnAddr").addEventListener("click", addrFill);
+  $("f_address").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); addrFill(); } });
+
+  /* ---------- 입력 ---------- */
+  const F = ["name", "alias", "kind", "deal", "address", "station", "walk", "area", "rooms", "deposit", "rent", "mgmt", "parking", "pfee", "movein", "deadline", "status", "link", "memo", "priority", "rank", "agent"];
+  const MAP = { walk: "walkMin", pfee: "parkingFee", movein: "moveIn" };
+  function openForm(id) {
+    closeSheets();
+    S.editing = id || null; S.pending = []; S.removed = [];
+    const it = id ? S.items.find((x) => x.id === id) : null;
+    $("fTitle").textContent = it ? "고치기: " + (it.name || "") : "매물 올리기";
+    $("f_quick").value = ""; $("quickMsg").textContent = QUICK_HINT; S.quickId = null; $("addrMsg").textContent = ADDR_HINT;
+    for (const k of F) { const f = $("f_" + k); const key = MAP[k] || k; const v = it ? it[key] : null; if (f.tagName === "SELECT") f.value = v || f.options[0].value; else f.value = v == null ? "" : v; }
+    S.keepPhotos = it && Array.isArray(it.photos) ? it.photos.slice() : [];
+    $("photoField").hidden = !S.assets; $("noUploadHint").hidden = !!S.assets;
+    drawThumbs();
+    S.keepVideos = it && Array.isArray(it.videos) ? it.videos.slice() : []; S.vUp = []; S.vRemoved = [];
+    drawVideos();
+    openSheet("formSheet");
+  }
+  function drawThumbs() {
+    const t = $("thumbs"); t.replaceChildren();
+    S.keepPhotos.forEach((p, i) => { const pid = typeof p === "string" ? p : p.id; const isPdf = isPdfId(p); t.append(el("div", { class: "thumb" }, isPdf ? el("div", { class: "pdf", text: "PDF" }) : el("img", { src: imgSrc(pid), alt: "올린 사진" }), el("button", { type: "button", text: "빼기", onclick: () => { S.keepPhotos.splice(i, 1); S.removed = (S.removed || []).concat([pid]); drawThumbs(); } }))); });
+    S.pending.forEach((f, i) => { const isPdf = f.type === "application/pdf"; const url = isPdf ? null : URL.createObjectURL(f); t.append(el("div", { class: "thumb" }, isPdf ? el("div", { class: "pdf", text: "PDF" }) : el("img", { src: url, alt: "새 사진" }), el("button", { type: "button", text: "빼기", onclick: () => { S.pending.splice(i, 1); drawThumbs(); } }))); });
+  }
+  function addFiles(list) {
+    for (const f of list) {
+      if (!/^image\/(png|jpeg|gif|webp|heic|heif)$/.test(f.type) && f.type !== "application/pdf") { toast("사진(jpg·png·heic 등)이나 PDF만 올릴 수 있어요"); continue; }
+      if (f.size > 20 * 1024 * 1024) { toast("20MB보다 큰 파일은 올릴 수 없어요"); continue; }
+      S.pending.push(f);
+    }
+    drawThumbs();
+  }
+  $("btnPick").addEventListener("click", () => $("f_files").click());
+  $("f_files").addEventListener("change", (e) => { addFiles(e.target.files); e.target.value = ""; });
+  const dz = $("dropZone");
+  dz.addEventListener("dragover", (e) => { e.preventDefault(); dz.classList.add("on"); });
+  dz.addEventListener("dragleave", () => dz.classList.remove("on"));
+  dz.addEventListener("drop", (e) => { e.preventDefault(); dz.classList.remove("on"); if (S.assets) addFiles(e.dataTransfer.files); });
+  document.addEventListener("paste", (e) => { if ($("formSheet").hidden || !S.assets) return; const files = [...(e.clipboardData && e.clipboardData.files || [])]; if (files.length) { e.preventDefault(); addFiles(files); toast("붙여넣은 그림을 담았어요"); } });
+
+  $("itemForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!S.db) { toast("지금은 저장할 수 없어요"); return; }
+    const name = $("f_name").value.trim(); if (!name) { $("f_name").focus(); toast("이름을 적어 주세요"); return; }
+    const btn = $("btnSave"); btn.disabled = true; btn.textContent = "저장 중…";
+    S.saving = true;
+    try {
+      // 올리는 중인 동영상은 다 오를 때까지 기다린다(버튼에 % 표시)
+      if (S.vUp.some((j) => j.state === "up")) { setSent(S.vUp.find((j) => j.state === "up"), 0); await Promise.all(S.vUp.map((j) => j.promise)); btn.textContent = "저장 중…"; }
+      const vFail = S.vUp.filter((j) => j.state === "fail").length;
+      const videos = S.keepVideos.concat(S.vUp.filter((j) => j.state === "done").map((j) => j.rec));
+      const photos = S.keepPhotos.slice();
+      if (S.assets) for (let i = 0; i < S.pending.length; i++) { const f = S.pending[i]; btn.textContent = "사진 올리는 중 " + (i + 1) + "/" + S.pending.length; const r = await S.assets.upload(f, f.type ? undefined : { type: "image/png" }); photos.push({ id: r.id, type: r.contentType }); }
+      btn.textContent = "저장 중…";
+      const old = S.editing ? S.items.find((x) => x.id === S.editing) : null;
+      const body = Object.assign({}, old || {});
+      delete body.id;
+      for (const k of F) { const key = MAP[k] || k; const v = $("f_" + k).value.trim(); body[key] = ["walk", "area", "rooms", "deposit", "rent", "mgmt", "pfee", "rank"].includes(k) ? n(v) : v; }
+      body.photos = photos;
+      body.videos = videos;
+      body.updatedAt = new Date().toISOString();
+      if (!old) { body.createdAt = body.updatedAt; body.source = LOCAL ? "나" : "주인"; }
+      // 링크가 있는데 면적·방·보증금 중 빈 칸이 있으면 자동 정리 정리 대기(매일 아침 정기 검색이 빈 칸만 채움)
+      // 네이버는 자동 정리가 열 수 없어 대기로 두지 않는다. 공고는 면적이 범위라 대상에서 뺀다
+      // 2026-11-18: 링크가 없어도 주소가 있으면 대기(자동 정리가 주소로 같은 건물 매물·건물 정보를 찾음)
+      const missing = body.kind !== "공고" && ((body.link && siteOf(body.link).site !== "네이버") || (!body.link && body.address)) && (body.area == null || body.rooms == null || body.deposit == null || (body.deal !== "전세" && body.rent == null));
+      // 자동 정리가 «못함»으로 둔 집은 링크·주소가 그대로면 다시 대기로 돌리지 않는다(매일 같은 집을 또 찾지 않게)
+      const sameSrc = old && old.fill === "못함" && (old.link || "") === (body.link || "") && (old.address || "") === (body.address || "");
+      body.fill = LOCAL ? "" : missing ? (sameSrc ? "못함" : "대기") : (old && old.fill === "완료" ? "완료" : "");
+      const qid = !old && S.quickId && !S.items.some((x) => x.id === S.quickId) ? S.quickId : null;
+      const ref = S.editing ? S.db.doc("listings/" + S.editing) : qid ? S.db.doc("listings/" + qid) : S.db.collection("listings").doc();
+      await ref.set(body);
+      if (S.assets && S.removed) for (const pid of S.removed) { try { await S.assets.delete(pid); } catch (err) { /* 이미 없으면 넘어감 */ } }
+      for (const vid of S.vRemoved) { call("videoTrash", { id: vid }).catch(() => {}); }
+      S.removed = []; S.pending = []; S.vUp = []; S.vRemoved = [];
+      closeSheets(true); toast((old ? "고쳤어요" : "올렸어요") + (vFail ? " · 못 올린 동영상 " + vFail + "개는 빼고 저장했어요" : "") + (body.fill === "대기" ? " · 빈 칸은 내일 아침 자동 정리가 채워요" : ""));
+    } catch (err) {
+      const code = err && err.code;
+      toast(code === "too_large" ? "파일이 너무 커요(20MB까지)" : code === "unsupported_type" ? "이 파일 형식은 올릴 수 없어요" : code === "quota_or_state" || code === "quota_exceeded" ? "저장 공간이 꽉 찼어요. 탈락한 집의 사진을 지워 주세요" : "저장하지 못했어요: " + (code || "오류"));
+    } finally { S.saving = false; btn.disabled = false; btn.textContent = "저장"; }
+  });
+
+  /* ---------- 조건 ---------- */
+  const CF = { minArea: "c_minArea", minRooms: "c_minRooms", selfFunds: "c_self", maxDeposit: "c_maxDep", monthlyTarget: "c_monthly", rate: "c_rate", moveBy: "c_moveBy", near: "c_near" };
+  $("btnCond").addEventListener("click", () => { for (const k in CF) $(CF[k]).value = S.cond[k] == null ? "" : S.cond[k]; openSheet("condSheet"); });
+  $("condForm").addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const next = {};
+    for (const k in CF) { const v = $(CF[k]).value.trim(); next[k] = (k === "moveBy" || k === "near") ? v : (n(v) == null ? DEFAULT_COND[k] : n(v)); }
+    S.cond = Object.assign({}, DEFAULT_COND, next); render(); closeSheets();
+    if (S.db) { try { await S.db.doc("settings/conditions").set(Object.assign({}, S.cond, { updatedAt: new Date().toISOString() })); toast("조건을 저장했어요"); } catch (err) { toast("이 화면에서만 바뀌었어요(저장 못 함)"); } }
+  });
+
+  /* ---------- 필터 ---------- */
+  document.querySelectorAll("[data-status]").forEach((b) => b.addEventListener("click", () => { S.status = b.dataset.status; document.querySelectorAll("[data-status]").forEach((x) => x.setAttribute("aria-pressed", String(x === b))); render(); }));
+  document.querySelectorAll("[data-kind]").forEach((b) => b.addEventListener("click", () => { S.kind = b.dataset.kind; document.querySelectorAll("[data-kind]").forEach((x) => x.setAttribute("aria-pressed", String(x === b))); render(); }));
+  $("priSel").addEventListener("change", (e) => { S.pri = e.target.value; render(); });
+  $("tagSel").addEventListener("change", (e) => { S.tag = e.target.value; render(); });
+  // 검색 칸: 칠 때마다 바로 거른다(집이 수십 곳이라 기다릴 필요 없음). Esc·✕로 지운다
+  function setQ(v) { S.q = v; if ($("q").value !== v) $("q").value = v; $("qClear").hidden = !v; render(); }
+  $("q").addEventListener("input", (e) => setQ(e.target.value));
+  $("q").addEventListener("keydown", (e) => { if (e.key === "Escape" && S.q) { e.stopPropagation(); setQ(""); } else if (e.key === "Enter") e.target.blur(); });
+  $("qClear").addEventListener("click", () => { setQ(""); $("q").focus(); });
+  // 빈 화면 «필터 다 풀고 찾기»: 찾는 말만 남기고 상태·종류·우선순위·의견 태그·새 것만 보기를 푼다
+  function resetFiltersKeepQ() {
+    S.status = "all"; S.kind = "all"; S.pri = "all"; S.tag = "all"; NEWS.only = false;
+    document.querySelectorAll("[data-status]").forEach((x) => x.setAttribute("aria-pressed", String(x.dataset.status === "all")));
+    document.querySelectorAll("[data-kind]").forEach((x) => x.setAttribute("aria-pressed", String(x.dataset.kind === "all")));
+    $("priSel").value = "all"; $("tagSel").value = "all";
+    render();
+  }
+  $("btnCondShow").addEventListener("click", () => { const open = $("topBar").classList.toggle("cond-open"); $("btnCondShow").setAttribute("aria-expanded", String(open)); render(); });
+  $("sortSel").addEventListener("change", (e) => { S.sort = e.target.value; try { localStorage.setItem("hhmy_sort", S.sort); } catch (err) { /* 저장 안 돼도 됨 */ } render(); });
+  try { const s = localStorage.getItem("hhmy_sort"); if (s) { S.sort = s; $("sortSel").value = s; } } catch (err) { /* 무시 */ }
+  $("btnAdd").addEventListener("click", () => openForm(null));
+  $("btnClearCmp").addEventListener("click", () => { S.sel.clear(); render(); });
+
+  /* ---------- 저장소 연결: 구글 시트에 붙은 앱스 스크립트 웹 앱 ---------- */
+  const API = ""; // 범용판은 서버 없음(my/local.js)
+  const KEY_NAME = "hhmy_key";
+  const getKey = () => { try { return localStorage.getItem(KEY_NAME) || ""; } catch (e) { return ""; } };
+  const setKey = (k) => { try { localStorage.setItem(KEY_NAME, k); } catch (e) { /* 저장 안 돼도 이번엔 쓸 수 있음 */ } };
+  let memKey = "";
+  async function call(action, extra) {
+    if (LOCAL) return LOCAL.call(action, extra);
+    if (API.indexOf("http") !== 0) { const e = new Error("백엔드 주소가 아직 없어요"); e.code = "no_api"; throw e; }
+    const r = await fetch(API, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify(Object.assign({ key: getKey() || memKey, action: action }, extra || {})) });
+    const j = await r.json();
+    if (!j.ok) { const e = new Error(j.error || "오류"); e.code = /비밀번호/.test(j.error || "") ? "bad_key" : "server"; throw e; }
+    return j;
+  }
+  const store = { items: new Map(), cond: null, itemCbs: [], condCbs: [], loaded: false, sig: "" };
+  const strip = (it) => { const o = Object.assign({}, it); delete o.id; return o; };
+  const snapItems = () => ({ docs: [...store.items.values()].map((it) => ({ id: it.id, data: () => strip(it) })), metadata: { fromCache: false } });
+  const snapCond = () => ({ exists: !!store.cond, data: () => store.cond || {} });
+  function fire() { store.itemCbs.forEach((cb) => cb(snapItems())); store.condCbs.forEach((cb) => cb(snapCond())); }
+  const fixDate = (v) => { if (typeof v === "string" && /GMT/.test(v)) { const d = new Date(v); if (!isNaN(d)) return d.toLocaleDateString("sv-SE", { timeZone: "Asia/Seoul" }); } return v; };
+  const fromServer = (it) => { const o = Object.assign({}, it); ["moveIn", "deadline"].forEach((k) => { if (o[k]) o[k] = fixDate(o[k]); });
+    // 2026-11-12: 예전 칸 순서 때문에 순위 숫자가 우선순위 칸에 들어간 집이 있다 → 순위로 읽는다(다음에 고칠 때 제자리로 저장됨)
+    if (o.status === "관심") o.status = "후보"; // 2026-11-18 «관심» 없앰: 마음은 우선순위로, 상태는 진행 단계(후보·신청함·탈락)만
+    if (/^\d+$/.test(String(o.priority || "").trim())) { if (!o.rank) o.rank = Number(o.priority); o.priority = ""; } o.photos = Array.isArray(it.images) ? it.images : []; delete o.images; return o; };
+  const toServer = (it) => { const o = Object.assign({}, it); o.images = (Array.isArray(it.photos) ? it.photos : []).map((p) => typeof p === "string" ? p : p.id); delete o.photos; return o; };
+  const newId = () => "u" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  async function persist(it) {
+    const prev = store.items.get(it.id);
+    store.items.set(it.id, it); fire();
+    try { await call("save", { item: toServer(it) }); }
+    catch (e) { if (prev) store.items.set(it.id, prev); else store.items.delete(it.id); fire(); throw e; }
+  }
+  function docRef(path) {
+    const parts = path.split("/"), col = parts[0], id = parts[1];
+    return {
+      async set(data) {
+        if (col === "listings") { touch(id); await persist(Object.assign({ id: id }, data)); }
+        else if (col === "settings") { store.cond = data; fire(); await call("saveConditions", { cond: data }); }
+        /* dismissed: 지운 집은 줄에 deleted 표시가 남아서 따로 적지 않는다 */
+      },
+      async update(part) { touch(id); await persist(Object.assign({}, store.items.get(id) || { id: id }, part)); },
+      async delete() { if (col === "listings") { store.items.delete(id); fire(); await call("remove", { id: id }); } },
+      onSnapshot(cb) { if (col === "settings") { store.condCbs.push(cb); if (store.loaded) cb(snapCond()); } }
+    };
+  }
+  const db = {
+    collection() { return { onSnapshot(cb) { store.itemCbs.push(cb); if (store.loaded) cb(snapItems()); }, doc() { return docRef("listings/" + newId()); } }; },
+    doc: docRef
+  };
+  async function refresh() {
+    const j = await call("list");
+    const sig = JSON.stringify([j.items, j.cond, j.comments, j.agents, j.geo, j.ref, j.geoError]);
+    store.loaded = true;
+    if (sig === store.sig) return;
+    store.sig = sig;
+    GEO.loaded = !!j.geo; GEO.at = j.geo || {}; GEO.ref = j.ref && j.ref.lat ? j.ref : null; GEO.err = j.geoError || null;
+    CM.list = Array.isArray(j.comments) ? j.comments : [];
+    CM.agents = Array.isArray(j.agents) ? j.agents : [];
+    store.items = new Map((j.items || []).map((it) => [it.id, fromServer(it)]));
+    store.cond = j.cond || null;
+    fire();
+  }
+  function cmtCount(id) { return CM.list.filter((c) => c.itemId === id).length; }
+  function buildThread(itemId) {
+    const box = el("section", { class: "thread" });
+    const inputStyle = "border:1px solid var(--line);border-radius:8px;padding:7px 9px;background:var(--bg);min-width:0";
+    const draw = () => {
+      box.replaceChildren(el("h3", { text: "둘이 남기는 의견", style: "margin:14px 0 6px;font-size:.98rem" }));
+      const list = CM.list.filter((c) => c.itemId === itemId);
+      if (!list.length) box.append(el("p", { class: "small muted", text: "아직 의견이 없어요. 아래에 적으면 둘 다 볼 수 있어요." }));
+      list.forEach((c) => {
+        const del = el("button", { class: "linkbtn", type: "button", text: "지우기", "aria-label": "이 의견 지우기" });
+        del.addEventListener("click", async () => {
+          CM.list = CM.list.filter((x) => x.id !== c.id); draw(); render();
+          try { await call("uncomment", { id: c.id }); } catch (e) { toast("지우지 못했어요"); refresh().catch(() => {}); }
+        });
+        box.append(el("div", { class: "cmt" },
+          el("div", { class: "small muted cmt-h" }, el("span", null, el("b", { text: c.who || "이름 없음" }), " · " + String(c.at || "").slice(5, 16).replace("T", " ")), del),
+          el("div", { style: "white-space:pre-wrap", text: c.text })));
+      });
+      const who = el("input", { id: "cm_who", placeholder: "내 이름", "aria-label": "내 이름", style: inputStyle + ";width:6.5em" });
+      who.value = CM.who;
+      const txt = el("input", { id: "cm_text", placeholder: "의견 한 줄 (예: 주차가 걸려)", "aria-label": "의견", style: inputStyle + ";flex:1 1 12em" });
+      const send = el("button", { class: "btn primary", type: "button", text: "남기기" });
+      const go = async () => {
+        const text = txt.value.trim(), name = who.value.trim();
+        if (!text) { txt.focus(); return; }
+        if (!name) { who.focus(); toast("이름을 적어 주세요"); return; }
+        CM.who = name; try { localStorage.setItem("hhmy_who", name); } catch (e) { /* 저장 안 돼도 됨 */ }
+        send.disabled = true;
+        try { const r = await call("comment", { itemId: itemId, who: name, text: text }); CM.list.push(r.comment); store.sig = ""; draw(); render(); }
+        catch (e) { toast("저장하지 못했어요"); send.disabled = false; }
+      };
+      send.addEventListener("click", go);
+      txt.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); go(); } });
+      box.append(el("div", { class: "actions cmform" }, who, txt, send));
+    };
+    draw();
+    return box;
+  }
+  function agentBlock(it) {
+    const a = agentOf(it.agent);
+    const box = el("section", { class: "agentbox" }, el("h3", { text: "중개사 · " + it.agent }));
+    if (a) {
+      box.append(el("div", { class: "small" }, el("span", { class: "stars", text: stars(a.rating) }), a.tel ? " · " + a.tel : ""));
+      if (a.note) box.append(el("div", { style: "white-space:pre-wrap;margin-top:4px", text: a.note }));
+    } else box.append(el("div", { class: "small muted", text: "아직 특징을 정리하지 않았어요." }));
+    box.append(el("div", { class: "actions", style: "margin-top:8px" }, el("button", { class: "btn", type: "button", text: a ? "중개사 정보 보기·고치기" : "특징 적기", onclick: () => openAgents(it.agent) })));
+    return box;
+  }
+  function openAgents(editName) { closeSheets(); drawAgents(editName || null, false); openSheet("agentSheet"); }
+  function drawAgents(editName, adding) {
+    const body = $("aBody"); body.replaceChildren();
+    const addBtn = el("button", { class: "btn primary", type: "button", text: "+ 중개사 추가" });
+    addBtn.addEventListener("click", () => drawAgents(null, true));
+    body.append(el("div", { class: "actions" }, addBtn));
+    if (adding) body.append(agentForm(null, ""));
+    const names = [...new Set([...CM.agents.map((a) => a.name), ...S.items.map((x) => x.agent).filter(Boolean)])];
+    if (!names.length && !adding) body.append(el("p", { class: "empty small", text: "아직 정리한 중개사가 없어요. «+ 중개사 추가»로 시작하세요." }));
+    names.forEach((name) => {
+      const a = agentOf(name);
+      if (editName === name) { body.append(agentForm(a, name)); return; }
+      const homes = S.items.filter((x) => x.agent === name);
+      const card = el("div", { class: "acard" },
+        el("h3", { text: name }),
+        el("div", { class: "small" }, el("span", { class: "stars", text: stars(a ? a.rating : 0) }), a && a.tel ? " · " + a.tel : ""));
+      if (a && a.note) card.append(el("div", { style: "white-space:pre-wrap;margin-top:4px", text: a.note }));
+      else card.append(el("div", { class: "small muted", text: a ? "특징 메모 없음" : "아직 특징을 정리하지 않았어요" }));
+      if (homes.length) {
+        const row = el("div", { class: "small", style: "margin-top:6px" }, el("span", { class: "muted", text: "이 중개사의 집 " + homes.length + "곳: " }));
+        homes.forEach((h, i) => { row.append(i ? ", " : "", el("a", { href: "#", text: dispName(h), onclick: (e) => { e.preventDefault(); closeSheets(); openDetail(h.id); } })); });
+        card.append(row);
+      }
+      card.append(el("div", { class: "actions", style: "margin-top:8px" }, el("button", { class: "btn", type: "button", text: a ? "고치기" : "특징 적기", onclick: () => drawAgents(name, false) })));
+      body.append(card);
+    });
+  }
+  function agentForm(a, name) {
+    const nameIn = el("input", { id: "ag_name", placeholder: "예: ○○ ○○공인", "aria-label": "중개사 이름" });
+    nameIn.value = a ? a.name : name; if (a || name) nameIn.readOnly = true;
+    const tel = el("input", { id: "ag_tel", inputmode: "tel", placeholder: "연락처", "aria-label": "연락처" }); tel.value = a ? a.tel : "";
+    const rate = el("select", { id: "ag_rating", "aria-label": "느낌 점수" }, ...[0, 1, 2, 3, 4, 5].map((r) => { const o = el("option", { value: String(r), text: r ? stars(r) : "별점 없음" }); if ((a ? a.rating : 0) === r) o.selected = true; return o; }));
+    const note = el("textarea", { id: "ag_note", placeholder: "특징: 친절한지, 연락 빠른지, 수수료, 집 상태를 솔직히 말하는지 등", "aria-label": "특징" }); note.value = a ? a.note : "";
+    const save = el("button", { class: "btn primary", type: "button", text: "저장" });
+    const cancel = el("button", { class: "btn ghost", type: "button", text: "취소", onclick: () => drawAgents(null, false) });
+    const form = el("div", { class: "acard" },
+      el("div", { class: "field" }, el("label", { for: "ag_name", text: "중개사 이름" }), nameIn),
+      el("div", { class: "field" }, el("label", { for: "ag_tel", text: "연락처" }), tel),
+      el("div", { class: "field" }, el("label", { for: "ag_rating", text: "느낌 점수" }), rate),
+      el("div", { class: "field" }, el("label", { for: "ag_note", text: "특징" }), note),
+      el("div", { class: "actions" }, save, cancel));
+    if (a) {
+      const del = el("button", { class: "btn danger", type: "button", text: "정리 지우기" });
+      del.addEventListener("click", async () => { try { await call("removeAgent", { id: a.id }); CM.agents = CM.agents.filter((x) => x.id !== a.id); store.sig = ""; drawAgents(null, false); render(); toast("중개사 정리를 지웠어요(집의 중개사 이름은 그대로예요)"); } catch (e) { toast("지우지 못했어요"); } });
+      form.querySelector(".actions").append(del);
+    }
+    save.addEventListener("click", async () => {
+      const nm = nameIn.value.trim(); if (!nm) { nameIn.focus(); toast("중개사 이름을 적어 주세요"); return; }
+      if (!a && agentOf(nm)) { toast("이미 있는 중개사예요. 목록에서 고쳐 주세요"); return; }
+      const rec = { id: a ? a.id : "g" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5), name: nm, tel: tel.value.trim(), rating: Number(rate.value) || 0, note: note.value.trim() };
+      save.disabled = true;
+      try { await call("saveAgent", { agent: rec }); CM.agents = CM.agents.filter((x) => x.id !== rec.id).concat([rec]); store.sig = ""; drawAgents(null, false); render(); toast("중개사 정리를 저장했어요"); }
+      catch (e) { save.disabled = false; toast("저장하지 못했어요"); }
+    });
+    return form;
+  }
+  $("btnAgents").addEventListener("click", () => openAgents(null));
+  // 새로고침: 새 버전·최신 데이터를 다시 불러온다. 열린 창(입력 중일 수 있음)이 있으면 앱 안 창으로 한 번 묻는다.
+  function doReload() {
+    // 서비스워커·앱 캐시가 없는 앱이라 인터넷이 끊긴 채 다시 불러오면 브라우저 오류 화면이 된다(지울 캐시도 없다)
+    if (navigator.onLine === false) { toast("인터넷이 끊겨 있어요. 연결되면 다시 눌러 주세요"); return; }
+    const b = $("btnReload"); b.classList.remove("spin"); void b.offsetWidth; b.classList.add("spin");
+    const u = new URL(location.href); u.searchParams.set("r", String(Date.now())); // 기존 주소 값·해시는 그대로 두고 r만 바꿔 브라우저 캐시를 피함
+    setTimeout(() => location.replace(u.toString()), 350);
+  }
+  $("btnReload").addEventListener("click", () => {
+    const open = ["detailSheet", "formSheet", "condSheet", "agentSheet"].some((id) => !$(id).hidden);
+    if (open && navigator.onLine !== false) { $("reloadSheet").hidden = false; $("rlNo").focus(); } else doReload();
+  });
+  $("rlNo").addEventListener("click", () => { $("reloadSheet").hidden = true; });
+  $("rlYes").addEventListener("click", () => { $("reloadSheet").hidden = true; doReload(); });
+  $("reloadSheet").addEventListener("click", (e) => { if (e.target === $("reloadSheet")) $("reloadSheet").hidden = true; });
+  try { const cu = new URL(location.href); if (cu.searchParams.has("r")) { cu.searchParams.delete("r"); history.replaceState(null, "", cu.pathname + cu.search + cu.hash); } } catch (e) { /* 주소 정리는 못 해도 괜찮음 */ }
+  function showGate(msg) { $("gateMsg").textContent = msg || "처음 한 번만 넣으면 이 기기에 기억해요."; $("gateSheet").hidden = false; setTimeout(() => $("gatePw").focus(), 30); }
+  $("gateForm").addEventListener("submit", (e) => { e.preventDefault(); const v = $("gatePw").value; if (!v) return; memKey = v; setKey(v); $("gateSheet").hidden = true; start(); });
+
+  // 폰에서 «공유 → 집 찾기»로 열면 주소에 title·text·url이 붙어 온다(안드로이드, 홈 화면에 추가한 앱)
+  let SHARED = null;
+  try {
+    const su = new URL(location.href), sp = su.searchParams;
+    if (sp.has("text") || sp.has("url")) {
+      SHARED = { text: [sp.get("title"), sp.get("text"), sp.get("url")].filter(Boolean).join("\n") };
+      ["title", "text", "url"].forEach((k) => sp.delete(k));
+      history.replaceState(null, "", su.pathname + su.search + su.hash);
+    }
+  } catch (e) { /* 주소를 못 읽으면 공유 글 없이 연다 */ }
+  let started = false;
+  async function start() {
+    const note = $("statusNote");
+    S.db = db; S.assets = LOCAL ? LOCAL.assets : DRIVE_ASSETS; S.canWrite = true;
+    if (!started) {
+      started = true;
+      db.collection("listings").onSnapshot((snap) => {
+        S.items = snap.docs.map((d) => Object.assign({ id: d.id }, d.data()));
+        for (const id of [...S.sel]) if (!S.items.some((x) => x.id === id)) S.sel.delete(id);
+        S.loaded = true; note.hidden = true; note.classList.remove("warn");
+        render();
+        if (SHARED && !SHARED.done) { SHARED.done = true; openForm(null); $("f_quick").value = SHARED.text; quickFill(); }
+      });
+      db.doc("settings/conditions").onSnapshot((snap) => { if (snap.exists) { S.cond = Object.assign({}, DEFAULT_COND, snap.data()); render(); } });
+      setInterval(() => { if (!document.hidden && (LOCAL || getKey())) refresh().catch(() => {}); }, 30000);
+      document.addEventListener("visibilitychange", () => { if (!document.hidden && (LOCAL || getKey())) refresh().catch(() => {}); });
+      if (LOCAL) LOCAL.ready({ refresh: () => refresh().catch(() => {}), toast: toast, render: render, closeSheets: closeSheets, openSheet: openSheet, cond: () => S.cond });
+    }
+    if (!LOCAL && !getKey() && !memKey) { note.textContent = "비밀번호를 넣으면 목록이 보여요."; showGate(""); return; }
+    try { await refresh(); note.hidden = true; if (!NEWS.saved) { NEWS.saved = true; markVisit(); } }
+    catch (e) {
+      note.hidden = false; note.classList.add("warn");
+      if (e.code === "bad_key") { try { localStorage.removeItem(KEY_NAME); } catch (x) {} memKey = ""; note.textContent = "비밀번호가 맞지 않아요."; showGate("비밀번호가 맞지 않아요. 다시 넣어 주세요."); }
+      else if (e.code === "no_api") note.textContent = "백엔드가 아직 연결되지 않았어요.";
+      else note.textContent = "목록을 불러오지 못했어요. 잠시 뒤 다시 열어 보세요.";
+      S.loaded = true; render();
+    }
+  }
+  render();
+  start();
+
+})();
+</script>
+<script>
+// ── 홈 화면에 추가 ──
+// 크롬(안드로이드)은 beforeinstallprompt로 설치 창, 아이폰 사파리는 «공유 → 홈 화면에 추가» 안내 창. 홈 화면에서 연 상태면 숨긴다.
+(function () {
+  var wrap = document.getElementById("installWrap"), btn = document.getElementById("btnInstall");
+  if (!wrap || !btn) return;
+  var standalone = (window.matchMedia && matchMedia("(display-mode: standalone)").matches) || window.navigator.standalone === true;
+  if (standalone) return;
+  var ua = navigator.userAgent || "";
+  var isIOS = /iPhone|iPad|iPod/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  var isAndroid = /Android/.test(ua);
+  var deferred = null;
+  window.addEventListener("beforeinstallprompt", function (e) { e.preventDefault(); deferred = e; wrap.hidden = false; });
+  window.addEventListener("appinstalled", function () { wrap.hidden = true; deferred = null; });
+  if (isIOS || isAndroid) wrap.hidden = false;
+  function steps(title, list, note) {
+    var d = document.createElement("dialog"); d.className = "inst-dlg";
+    d.innerHTML = "<h3></h3><ol></ol><p></p><button type=" + '"button"' + ">알겠어요</button>";
+    d.querySelector("h3").textContent = title;
+    var ol = d.querySelector("ol"); list.forEach(function (t) { var li = document.createElement("li"); li.textContent = t; ol.appendChild(li); });
+    d.querySelector("p").textContent = note;
+    d.querySelector("button").onclick = function () { d.close(); };
+    d.addEventListener("close", function () { d.remove(); });
+    d.addEventListener("click", function (e) { var r = d.getBoundingClientRect(); if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) d.close(); });
+    if (typeof d.showModal !== "function") { alert(title + "\n\n" + list.map(function (t, i) { return (i + 1) + ". " + t; }).join("\n") + "\n\n" + note); return; }
+    document.body.appendChild(d); d.showModal();
+  }
+  btn.addEventListener("click", function () {
+    if (deferred) { var p = deferred; deferred = null; p.prompt(); p.userChoice.then(function () { wrap.hidden = true; }); return; }
+    if (isIOS) steps("홈 화면에 추가하는 방법", ["화면 아래(또는 위)의 공유 버튼 ⬆️을 눌러요", "목록에서 «홈 화면에 추가»를 골라요", "오른쪽 위 «추가»를 누르면 끝!"], "사파리에서 열어야 보여요. 다른 앱에서 열었다면 사파리로 다시 열어 주세요.");
+    else steps("홈 화면에 추가하는 방법", ["브라우저 오른쪽 위 ⋮ 메뉴를 눌러요", "«홈 화면에 추가» 또는 «앱 설치»를 골라요", "«추가»를 누르면 끝!"], "메뉴에 안 보이면 이미 추가했거나, 크롬 브라우저가 아닐 수 있어요.");
+  });
+})();
+</script>
+</body></html>

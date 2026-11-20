@@ -655,14 +655,16 @@ td.who .last-cmt { max-width: 360px; }
 <script>
 (function () {
   "use strict";
-  const DEFAULT_COND = { minArea: 33, minRooms: 2, selfFunds: 8000, maxDeposit: 33000, monthlyTarget: 100, rate: 2.5, moveBy: "2027-02-21", near: "신대방, 신사동, 보라매, 신림, 대방" };
+  // 범용판(/my/)은 my/local.js가 window.HH_LOCAL을 먼저 만든다: 저장은 이 기기, 사진은 IndexedDB(2026-11-20)
+  const LOCAL = window.HH_LOCAL || null;
+  const DEFAULT_COND = LOCAL ? LOCAL.defaultCond : { minArea: 33, minRooms: 2, selfFunds: 8000, maxDeposit: 33000, monthlyTarget: 100, rate: 2.5, moveBy: "2027-02-21", near: "신대방, 신사동, 보라매, 신림, 대방" };
   const S = { items: [], cond: Object.assign({}, DEFAULT_COND), status: "live", kind: "all", sort: "score", pri: "all", tag: "all", q: "", sel: new Set(), db: null, assets: null, canWrite: true, editing: null, pending: [], keepPhotos: [], keepVideos: [], vUp: [], vRemoved: [], saving: false, loaded: false };
   let EMPTY_HTML = "";
   // 사진 주소: 드라이브에 올린 것은 «gd:파일id»(그림)·«gdp:파일id»(PDF)로 저장한다(2026-11-18). 그림은 드라이브 썸네일(긴 쪽 2000px)로 보여 준다
-  const imgSrc = (p) => /^gd:/.test(p) ? "https://drive.google.com/thumbnail?sz=w2000&id=" + encodeURIComponent(p.slice(3))
+  const imgSrc = (p) => LOCAL && /^lpp?:/.test(p) ? LOCAL.imgSrc(p) : /^gd:/.test(p) ? "https://drive.google.com/thumbnail?sz=w2000&id=" + encodeURIComponent(p.slice(3))
     : /^gdp:/.test(p) ? "https://drive.google.com/file/d/" + encodeURIComponent(p.slice(4)) + "/view"
     : /^(https?:|plans\/)/.test(p) ? p : "/_blob/" + p;
-  const isPdfId = (p) => typeof p === "object" ? /pdf/.test(p.type || "") : /^gdp:/.test(String(p));
+  const isPdfId = (p) => typeof p === "object" ? /pdf/.test(p.type || "") : /^(gdp|lpp):/.test(String(p));
   const CM = { list: [], agents: [], who: (() => { try { return localStorage.getItem("hh_who") || ""; } catch (e) { return ""; } })() };
   const $ = (id) => document.getElementById(id);
   const el = (tag, attrs, ...kids) => { const e = document.createElement(tag); if (attrs) for (const k in attrs) { if (k === "class") e.className = attrs[k]; else if (k === "text") e.textContent = attrs[k]; else if (k.startsWith("on")) e.addEventListener(k.slice(2), attrs[k]); else if (attrs[k] !== undefined && attrs[k] !== null) e.setAttribute(k, attrs[k]); } for (const c of kids) if (c != null) e.append(c); return e; };
@@ -879,8 +881,8 @@ td.who .last-cmt { max-width: 360px; }
       el("span", { class: "chip" }, "월세+관리비 ", el("b", { class: "num", text: fmt(c.monthlyTarget) }), " 내외"),
       el("span", { class: "chip" }, "자기 돈 ", el("b", { class: "num", text: won(c.selfFunds) })),
       el("span", { class: "chip" }, "금리 ", el("b", { class: "num", text: fmt(c.rate, 2) + "%" })),
-      el("span", { class: "chip" }, "만기 ", el("b", { class: "num", text: c.moveBy })),
-      el("span", { class: "chip" }, "★ ", c.near));
+      c.moveBy ? el("span", { class: "chip" }, "만기 ", el("b", { class: "num", text: c.moveBy })) : "",
+      c.near ? el("span", { class: "chip" }, "★ ", c.near) : ""); // 범용판은 비어 있을 수 있음(빈 칩 숨김)
     // 폰: 조건은 한 줄 요약으로 접어 두고 눌러서 펼친다
     const open = $("topBar").classList.contains("cond-open");
     $("btnCondShow").textContent = (open ? "▴ " : "▾ ") + "조건 · " + fmt(py(c.minArea), 0) + "평↑ · 방 " + fmt(c.minRooms) + "↑ · 보증금 " + won(c.maxDeposit) + "↓ · 월 " + fmt(c.monthlyTarget);
@@ -1586,14 +1588,14 @@ td.who .last-cmt { max-width: 360px; }
       body.photos = photos;
       body.videos = videos;
       body.updatedAt = new Date().toISOString();
-      if (!old) { body.createdAt = body.updatedAt; body.source = "효니"; }
+      if (!old) { body.createdAt = body.updatedAt; body.source = LOCAL ? "나" : "효니"; }
       // 링크가 있는데 면적·방·보증금 중 빈 칸이 있으면 클로드 정리 대기(매일 아침 정기 검색이 빈 칸만 채움)
       // 네이버는 클로드가 열 수 없어 대기로 두지 않는다. 공고는 면적이 범위라 대상에서 뺀다
       // 2026-11-18: 링크가 없어도 주소가 있으면 대기(클로드가 주소로 같은 건물 매물·건물 정보를 찾음)
       const missing = body.kind !== "공고" && ((body.link && siteOf(body.link).site !== "네이버") || (!body.link && body.address)) && (body.area == null || body.rooms == null || body.deposit == null || (body.deal !== "전세" && body.rent == null));
       // 클로드가 «못함»으로 둔 집은 링크·주소가 그대로면 다시 대기로 돌리지 않는다(매일 같은 집을 또 찾지 않게)
       const sameSrc = old && old.fill === "못함" && (old.link || "") === (body.link || "") && (old.address || "") === (body.address || "");
-      body.fill = missing ? (sameSrc ? "못함" : "대기") : (old && old.fill === "완료" ? "완료" : "");
+      body.fill = LOCAL ? "" : missing ? (sameSrc ? "못함" : "대기") : (old && old.fill === "완료" ? "완료" : "");
       const qid = !old && S.quickId && !S.items.some((x) => x.id === S.quickId) ? S.quickId : null;
       const ref = S.editing ? S.db.doc("listings/" + S.editing) : qid ? S.db.doc("listings/" + qid) : S.db.collection("listings").doc();
       await ref.set(body);
@@ -1649,6 +1651,7 @@ td.who .last-cmt { max-width: 360px; }
   const setKey = (k) => { try { localStorage.setItem(KEY_NAME, k); } catch (e) { /* 저장 안 돼도 이번엔 쓸 수 있음 */ } };
   let memKey = "";
   async function call(action, extra) {
+    if (LOCAL) return LOCAL.call(action, extra);
     if (API.indexOf("http") !== 0) { const e = new Error("백엔드 주소가 아직 없어요"); e.code = "no_api"; throw e; }
     const r = await fetch(API, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify(Object.assign({ key: getKey() || memKey, action: action }, extra || {})) });
     const j = await r.json();
@@ -1840,7 +1843,7 @@ td.who .last-cmt { max-width: 360px; }
   let started = false;
   async function start() {
     const note = $("statusNote");
-    S.db = db; S.assets = DRIVE_ASSETS; S.canWrite = true;
+    S.db = db; S.assets = LOCAL ? LOCAL.assets : DRIVE_ASSETS; S.canWrite = true;
     if (!started) {
       started = true;
       db.collection("listings").onSnapshot((snap) => {
@@ -1851,10 +1854,11 @@ td.who .last-cmt { max-width: 360px; }
         if (SHARED && !SHARED.done) { SHARED.done = true; openForm(null); $("f_quick").value = SHARED.text; quickFill(); }
       });
       db.doc("settings/conditions").onSnapshot((snap) => { if (snap.exists) { S.cond = Object.assign({}, DEFAULT_COND, snap.data()); render(); } });
-      setInterval(() => { if (!document.hidden && getKey()) refresh().catch(() => {}); }, 30000);
-      document.addEventListener("visibilitychange", () => { if (!document.hidden && getKey()) refresh().catch(() => {}); });
+      setInterval(() => { if (!document.hidden && (LOCAL || getKey())) refresh().catch(() => {}); }, 30000);
+      document.addEventListener("visibilitychange", () => { if (!document.hidden && (LOCAL || getKey())) refresh().catch(() => {}); });
+      if (LOCAL) LOCAL.ready({ refresh: () => refresh().catch(() => {}), toast: toast, render: render, closeSheets: closeSheets, openSheet: openSheet, cond: () => S.cond });
     }
-    if (!getKey() && !memKey) { note.textContent = "비밀번호를 넣으면 목록이 보여요."; showGate(""); return; }
+    if (!LOCAL && !getKey() && !memKey) { note.textContent = "비밀번호를 넣으면 목록이 보여요."; showGate(""); return; }
     try { await refresh(); note.hidden = true; if (!NEWS.saved) { NEWS.saved = true; markVisit(); } }
     catch (e) {
       note.hidden = false; note.classList.add("warn");
