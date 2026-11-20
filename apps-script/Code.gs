@@ -1,11 +1,11 @@
 /**
  * 집 찾기 백엔드 (시트에 붙은 앱스 스크립트)
- * 시트 탭: 집 / 설정 / 의견 / 중개사.비밀번호는 스크립트 속성 HOUSE_KEY에 효니가 직접 넣는다(코드·레포에 넣지 않는다).
+ * 시트 탭: 집 / 설정 / 의견 / 중개사 / 이사.비밀번호는 스크립트 속성 HOUSE_KEY에 효니가 직접 넣는다(코드·레포에 넣지 않는다).
  * 배포: 배포 > 새 배포 > 웹 앱, 실행: 나, 액세스: 모든 사용자. 코드를 고치면 «배포 관리 > 새 버전»(주소 유지).
  * 지우기는 deleted=TRUE 표시만 한다(줄은 남는다). 정기 검색은 deleted·탈락 집을 다시 넣지 않는다.
  * 정기 검색(Claude)은 이 웹 앱이 아니라 구글 시트를 직접 읽고 써서 비밀번호가 필요 없다.
  */
-const VERSION = 6; // 2026-11-18 동영상(구글 드라이브 «집 찾기 영상» 폴더)
+const VERSION = 7; // 2026-11-20 이사 탭(시트 탭 «이사», saveMove). 6: 2026-11-18 동영상(구글 드라이브 «집 찾기 영상» 폴더)
 // 새 칸은 맨 뒤에만 더한다(이미 있는 줄의 칸 위치가 밀리지 않게)
 const COLS = ['id', 'name', 'kind', 'deal', 'station', 'walkMin', 'address', 'area', 'rooms', 'baths', 'deposit', 'rent', 'mgmt',
   'parking', 'parkingFee', 'moveIn', 'deadline', 'status', 'link', 'memo', 'images', 'source', 'createdAt', 'updatedAt', 'deleted',
@@ -39,6 +39,7 @@ function doPost(e) {
       case 'videoChunk': return out_(videoChunk_(d));
       case 'videoDone': return out_(videoDone_(String(d.id || '')));
       case 'videoTrash': return out_(videoTrash_(String(d.id || '')));
+      case 'saveMove': return out_(withLock_(() => saveMove_(d.move)));
     }
     return out_({ ok: false, error: '모르는 요청: ' + d.action });
   } catch (err) {
@@ -128,7 +129,9 @@ function list_() {
   // 위치는 덧붙이는 기능이라, 실패해도 집 목록은 그대로 돌려준다(검토 2026-11-13)
   let g;
   try { g = geo_(items); } catch (err) { g = { geo: {}, ref: null, error: 'geo_fail' }; }
-  return { ok: true, v: VERSION, items: items, cond: cond, comments: comments_(), agents: agents_(), geo: g.geo, ref: g.ref, geoError: g.error || null };
+  let mv = null;
+  try { mv = move_(); } catch (err) { mv = null; } // 이사 탭이 깨져도 집 목록은 돌려준다
+  return { ok: true, v: VERSION, items: items, cond: cond, comments: comments_(), agents: agents_(), geo: g.geo, ref: g.ref, geoError: g.error || null, move: mv };
 }
 
 /* ---------- 위치(2026-11-13): 주소 → 좌표는 카카오 로컬 API ----------
@@ -350,6 +353,46 @@ function remove_(id) {
 function saveCond_(cond) {
   condSheet_().getRange(1, 1).setValue(JSON.stringify(cond));
   return { ok: true };
+}
+
+/* ---------- 이사(2026-11-20): 이사 탭(move.js)의 MoveData를 시트 탭 «이사» A1에 JSON 하나로 ----------
+ * 둘이 같이 고치므로 통째로 덮지 않고 합친다: 할 일·견적·돈·메모는 id마다 at이 나중인 쪽, 이사 날은 dateAt이 나중인 쪽(move.js merge와 같은 규칙).
+ * 지우기는 del 표시만 남아 합쳐도 되살아나지 않는다. 출처: 효니 말 «남친도 체크해도 됨»(2026-11-20).
+ */
+function moveSheet_() {
+  const ss = SpreadsheetApp.getActive();
+  let sh = ss.getSheetByName('이사');
+  if (!sh) { sh = ss.insertSheet('이사'); sh.getRange(1, 1).setNumberFormat('@'); sh.getRange(1, 2).setValue('← 이사 탭 데이터(JSON). 앱이 읽고 쓴다, 손으로 고치지 않기'); }
+  return sh;
+}
+function move_() {
+  const raw = moveSheet_().getRange(1, 1).getValue();
+  if (!raw) return null;
+  try { return JSON.parse(raw); } catch (e) { return null; }
+}
+function mergeMove_(a, b) {
+  a = a && typeof a === 'object' ? a : {}; b = b && typeof b === 'object' ? b : {};
+  const tm = (s) => Date.parse(s || 0) || 0;
+  const join = (xs, ys) => {
+    const m = {}, order = [];
+    (Array.isArray(xs) ? xs : []).concat(Array.isArray(ys) ? ys : []).forEach((y) => {
+      if (!y || !y.id) return;
+      const id = String(y.id);
+      if (!m[id]) { m[id] = y; order.push(id); } else if (tm(y.at) > tm(m[id].at)) m[id] = y;
+    });
+    return order.map((id) => m[id]);
+  };
+  const out = { v: 1, date: a.date || '', dateAt: a.dateAt || '', tasks: join(a.tasks, b.tasks), quotes: join(a.quotes, b.quotes), money: join(a.money, b.money), notes: join(a.notes, b.notes) };
+  if (tm(b.dateAt) > tm(a.dateAt)) { out.date = b.date || ''; out.dateAt = b.dateAt; }
+  return out;
+}
+function saveMove_(move) {
+  if (!move || typeof move !== 'object') return { ok: false, error: '이사 데이터가 비었어요' };
+  const merged = mergeMove_(move_(), move);
+  const s = JSON.stringify(merged);
+  if (s.length > 45000) return { ok: false, error: '이사 데이터가 너무 커요(메모 글을 줄여 주세요)' };
+  moveSheet_().getRange(1, 1).setValue(s);
+  return { ok: true, move: merged };
 }
 
 /* ---------- 동영상(2026-11-18): 직접 찍은 영상을 효니 구글 드라이브 «집 찾기 영상» 폴더에 ----------
