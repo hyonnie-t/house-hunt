@@ -1030,6 +1030,7 @@ td.who .last-cmt { max-width: 360px; }
       },
       toast: (t) => toast(t),
       who: () => CM.who,
+      setWho: (v) => { CM.who = v; try { localStorage.setItem("hh_who", v); } catch (e) { /* 저장 안 돼도 이번엔 씀 */ } },
       assets: { upload: (f) => DRIVE_ASSETS.upload(f), delete: (id) => DRIVE_ASSETS.delete(id), src: (p) => imgSrc(p) },
       open: (list, i, alt) => openViewer(list, i, alt)
     });

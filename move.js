@@ -104,10 +104,13 @@
     const toast = (t) => { try { if (opt.toast) opt.toast(t); } catch (e) { /* 토스트 없음 */ } };
     const get = () => { if (!D) D = normalize(opt.load ? opt.load() : null, TPL); return D; };
     const who = () => { try { return String(opt.who ? opt.who() || "" : "").slice(0, 20); } catch (e) { return ""; } };
+    // 저장이 되면 true(사진 파일 지우기처럼 저장 뒤에만 할 일이 쓴다)
     async function commit(msg) {
+      let ok = true;
       try { await (opt.save && opt.save(JSON.parse(JSON.stringify(D)))); if (msg) toast(msg); }
-      catch (e) { toast("저장하지 못했어요: " + (e && e.message || "오류")); }
+      catch (e) { ok = false; toast("저장하지 못했어요: " + (e && e.message || "오류")); }
       render();
+      return ok;
     }
     function h(tag, attrs, kids) { const e = document.createElement(tag); if (attrs) Object.keys(attrs).forEach((k) => { const v = attrs[k]; if (v == null || v === false) return; if (k === "text") e.textContent = v; else if (k === "class") e.className = v; else if (k.slice(0, 2) === "on") e.addEventListener(k.slice(2), v); else e.setAttribute(k, v === true ? "" : v); }); (kids || []).forEach((c) => c != null && c !== false && e.append(c)); return e; }
 
@@ -121,6 +124,8 @@
         h("div", { class: "mv-dday" }, [h("b", { class: "num", text: big }), h("span", { class: "small muted", text: "할 일 " + live.length + "개 중 " + done + "개 끝" })]),
         h("div", { class: "mv-bar", role: "progressbar", "aria-valuemin": "0", "aria-valuemax": String(live.length || 1), "aria-valuenow": String(done), "aria-label": "끝낸 할 일" }, [h("i", { style: "width:" + (live.length ? Math.round(done / live.length * 100) : 0) + "%" })]),
         h("label", { class: "field", for: "mvDate" }, [h("span", { class: "small muted", text: "이사 날" }), inp]),
+        // 체크한 사람 이름: 개인판에서 아직 이름이 없는 기기(의견을 안 남긴 폰)면 여기서 한 번 받는다
+        opt.setWho && !who() ? h("label", { class: "field mv-who", for: "mvWho" }, [h("span", { class: "small muted", text: "내 이름(체크할 때 같이 남아요)" }), (() => { const w = h("input", { id: "mvWho", maxlength: "20", placeholder: "예: 효니" }); w.addEventListener("change", () => { const v = w.value.trim(); if (!v) return; try { opt.setWho(v.slice(0, 20)); } catch (e) { /* 저장 안 돼도 이번엔 씀 */ } toast(v + " 이름으로 남겨요"); render(); }); return w; })()]) : null,
         opt.extras ? null : h("p", { class: "hint", text: "이사 날을 넣으면 D-90·D-60처럼 날짜를 거꾸로 세서 할 일마다 날짜가 붙어요. 순서·날짜는 흔히 하는 틀이니 내 사정에 맞게 고치거나 지워 주세요." })
       ]);
     }
@@ -236,7 +241,7 @@
             const src = A.src(p);
             const open = pdf ? h("a", { class: "mv-pic pdf", href: src, target: "_blank", rel: "noopener", text: "PDF" })
               : h("button", { type: "button", class: "mv-pic", "aria-label": n.title + " 사진 크게 보기", onclick: () => { if (opt.open) opt.open(imgs.map((q) => ({ src: A.src(q) })), imgs.indexOf(p), n.title); else window.open(src, "_blank", "noopener"); } }, [h("img", { src: src, alt: "", loading: "lazy" })]);
-            const rm = h("button", { type: "button", class: "mv-picx", "aria-label": "이 사진 빼기", text: "✕", onclick: async () => { n.photos = n.photos.filter((q) => q !== p); n.at = tick(n.at); await commit("사진을 뺐어요"); try { await A.delete(p); } catch (e) { /* 이미 없으면 넘어감 */ } } });
+            const rm = h("button", { type: "button", class: "mv-picx", "aria-label": "이 사진 빼기", text: "✕", onclick: async () => { n.photos = n.photos.filter((q) => q !== p); n.at = tick(n.at); if (!(await commit("사진을 뺐어요"))) return; try { await A.delete(p); } catch (e) { /* 이미 없으면 넘어감 */ } } });
             pics.append(h("div", { class: "mv-picw" }, [open, rm]));
           });
           const fi = h("input", { type: "file", accept: "image/*,application/pdf", multiple: true, hidden: true, id: "mvf_" + n.id });
@@ -266,20 +271,28 @@
     }
     function render() {
       if (!root) return;
-      D = null; const d = get();
+      D = null; stale = false; const d = get();
       const y = window.scrollY, act = document.activeElement && document.activeElement.id;
       root.replaceChildren(head(d), tasks(d), opt.extras ? money(d) : null, quotes(d), opt.extras ? notes(d) : null);
       if (act && act.indexOf("mv") === 0) { const n = root.querySelector("#" + act); if (n) n.focus({ preventScroll: true }); }
       window.scrollTo(0, y);
     }
     // 바깥(30초 다시 읽기)에서 부를 때: 글을 쓰는 중이거나 사진을 올리는 중이면 건너뛴다(쓰던 글이 지워지지 않게)
+    // 건너뛰면 stale로 적어 두고, 칸에서 나가거나 올리기가 끝나면 그때 그린다(안 그러면 다음 읽기에 차이가 없어 영영 안 그려짐, 검토 2026-11-20)
+    let stale = false;
+    const typing = () => { const a = document.activeElement; return !!(a && root && root.contains(a) && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && a.type !== "checkbox"); };
     function refresh() {
-      if (!root || root.hidden || busy) return false;
-      const a = document.activeElement;
-      if (a && root.contains(a) && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName) && a.type !== "checkbox") return false;
+      if (!root || root.hidden) return false;
+      if (busy || typing()) { stale = true; return false; }
       render(); return true;
     }
-    function mount(el) { root = el; style(); render(); }
+    function later() { setTimeout(() => { if (stale && root && !root.hidden && !busy && !typing()) render(); }, 0); }
+    let bound = null;
+    function mount(el) {
+      root = el; style();
+      if (bound !== el) { bound = el; el.addEventListener("focusout", later); }
+      render();
+    }
     return { mount: mount, render: render, refresh: refresh, normalize: (x) => normalize(x, TPL), merge: (a, b) => merge(a, b, TPL), blank: () => blank(TPL) };
   }
   // 모양: 앱의 :root 토큰(--space-*·색)을 그대로 쓴다. 할 일을 끝내면 줄이 옅어지고 글자에 줄이 그어진다(짧은 전환)
