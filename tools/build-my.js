@@ -77,7 +77,7 @@ soft("신사동", "○○동");
 rep("setView([37.4875, 126.9131], 14)", "setView([37.5665, 126.978], 12)"); // 지도 처음 자리: 개인판 동네 대신 서울 가운데
 
 // 금지어 검사: 하나라도 남으면 멈춘다
-const BAN = [/신대방/, /신사동/, /37\.4875/,/관악/, /신림/, /보라매/, /난곡/, /효니/, /클로드/, /버팀목/, /남자친구/, /해링턴/, /2027-02/, /AKfycb/, /1USyz0/, /13jvApg/, /HOUSE_KEY/, /selfFunds: 8000/, /33000/, /plans\//];
+const BAN = [/신대방/, /신사동/, /37\.4875/,/관악/, /신림/, /보라매/, /난곡/, /효니/, /클로드/, /버팀목/, /남자친구/, /해링턴/, /2027-02/, /AKfycb/, /1USyz0/, /13jvApg/, /HOUSE_KEY/, /selfFunds: 8000/, /33000/, /plans\//, /["'`]hh_/, /["'`]hb_/]; // 끝 둘: 개인판과 같은 기기 저장 이름이 남으면 두 판이 서로 덮어씀(검토 2026-11-20)
 const left = BAN.filter((re) => re.test(s));
 if (left.length) { console.error("✗ 금지어가 남음: " + left.join(" ")); left.forEach((re) => { const i = s.search(re); console.error("   …" + s.slice(Math.max(0, i - 60), i + 60).replace(/\n/g, " ") + "…"); }); process.exit(1); }
 

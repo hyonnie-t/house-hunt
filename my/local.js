@@ -50,6 +50,17 @@
     try { localStorage.setItem(DATA_KEY, JSON.stringify(D)); }
     catch (e) { const er = new Error("이 기기 저장 공간이 꽉 찼어요"); er.code = "quota_exceeded"; throw er; }
   }
+  // 같은 기기의 다른 탭·홈 화면 앱이 그사이 저장했을 수 있으니, 고치기 전에 저장본을 다시 읽는다(검토 2026-11-20 B)
+  function reload() {
+    let raw = null; try { raw = localStorage.getItem(DATA_KEY); } catch (e) { return; }
+    if (!raw) return;
+    try { const x = JSON.parse(raw); if (x && typeof x === "object") { D = x; ["items", "comments", "agents"].forEach((k) => { if (!Array.isArray(D[k])) D[k] = []; }); if (!D.geo || typeof D.geo !== "object") D.geo = {}; if (!D.cond) D.cond = Object.assign({}, defaultCond); } } catch (e) { /* 깨진 저장본이면 메모리 것을 씀 */ }
+  }
+  // 고치고 저장하다 실패하면 메모리도 고치기 전으로 되돌린다(화면에 «저장된 척» 남지 않게, 검토 2026-11-20 D)
+  function change(fn) {
+    reload(); const before = JSON.stringify(D);
+    try { const r = fn(); persist(); return r; } catch (e) { D = JSON.parse(before); throw e; }
+  }
   const okId = (id) => /^[a-z0-9-]{1,80}$/.test(String(id || ""));
 
   /* ---------- 사진(IndexedDB) ---------- */
@@ -133,6 +144,7 @@
         let g;
         try { g = await geocode(it.address); geoErr = null; }
         catch (e) { geoErr = e.status ? String(e.status) : "연결 안 됨"; break; }
+        reload(); // 위치를 묻는 사이 다른 탭이 저장했을 수 있음
         D.geo[it.id] = g && !g.none ? { lat: g.lat, lng: g.lng, q: g.q, addr: it.address } : { lat: null, lng: null, q: "없음", addr: it.address };
         try { persist(); } catch (e) { break; }
         if (H) H.refresh();
@@ -148,8 +160,16 @@
   }
   async function call(action, x) {
     x = x || {};
+    if (action === "list") { reload(); await preload(photoIds()); setTimeout(geoQueue, 0); return listOut(); }
+    if (action === "addrLookup" || /^video/.test(action)) return callRead(action, x);
+    let removed = [];
+    const r = change(() => callWrite(action, x, (ids) => { removed = ids; }));
+    removed.forEach((id) => assets.delete(id)); // 사진은 저장이 된 뒤에 지운다
+    if (action === "save") setTimeout(geoQueue, 0);
+    return r;
+  }
+  function callWrite(action, x, dropPhotos) {
     switch (action) {
-      case "list": await preload(photoIds()); setTimeout(geoQueue, 0); return listOut();
       case "save": {
         const it = clone(x.item || {}); if (!okId(it.id)) throw new Error("집 id가 올바르지 않아요");
         const i = D.items.findIndex((o) => o.id === it.id), now = nowIso();
@@ -157,33 +177,37 @@
         if (i < 0) { it.createdAt = it.createdAt || now; D.items.push(it); }
         else { const old = D.items[i]; it.createdAt = old.createdAt || it.createdAt || now; it.source = old.source || it.source; D.items[i] = it; }
         delete it.deleted; delete it.videos; delete it.fill;
-        persist(); setTimeout(geoQueue, 0);
         return { ok: true, updatedAt: now };
       }
       case "remove": {
         const it = D.items.find((o) => o.id === x.id); if (!it) return { ok: true };
         // 줄은 지운 표시로 남긴다(다른 기기 백업을 합칠 때 지운 집이 되살아나지 않게). 사진은 이 기기에서 지운다
-        (Array.isArray(it.images) ? it.images : []).forEach((p) => { if (/^lpp?:/.test(p)) assets.delete(p); });
+        dropPhotos((Array.isArray(it.images) ? it.images : []).filter((p) => /^lpp?:/.test(p)));
         Object.keys(it).forEach((k) => { if (!/^(id|name|createdAt)$/.test(k)) delete it[k]; });
         it.deleted = true; it.updatedAt = nowIso(); delete D.geo[it.id];
-        persist(); return { ok: true };
+        return { ok: true };
       }
-      case "saveConditions": D.cond = clone(x.cond || {}); persist(); return { ok: true };
+      case "saveConditions": D.cond = clone(x.cond || {}); return { ok: true };
       case "comment": {
         const who = String(x.who || "").slice(0, 20), text = String(x.text || "").slice(0, 500);
         if (!okId(x.itemId) || !who || !text) throw new Error("의견 내용이 올바르지 않아요");
         const c = { id: rid("c"), itemId: String(x.itemId), who: who, text: text, at: nowIso() };
-        D.comments.push(c); persist(); return { ok: true, comment: clone(c) };
+        D.comments.push(c); return { ok: true, comment: clone(c) };
       }
-      case "uncomment": { const c = D.comments.find((o) => o.id === x.id); if (c) { c.deleted = true; c.at = c.at || nowIso(); persist(); } return { ok: true }; }
+      case "uncomment": { const c = D.comments.find((o) => o.id === x.id); if (c) { c.deleted = true; c.at = c.at || nowIso(); } return { ok: true }; }
       case "saveAgent": {
         const a = x.agent || {}, name = String(a.name || "").trim().slice(0, 40);
         if (!okId(a.id) || !name) throw new Error("중개사 이름이 올바르지 않아요");
         const row = { id: a.id, name: name, tel: String(a.tel || "").slice(0, 30), rating: Math.max(0, Math.min(5, Math.round(Number(a.rating) || 0))), note: String(a.note || "").slice(0, 1000), updatedAt: nowIso() };
         const i = D.agents.findIndex((o) => o.id === a.id); if (i < 0) D.agents.push(row); else D.agents[i] = row;
-        persist(); return { ok: true };
+        return { ok: true };
       }
-      case "removeAgent": { const a = D.agents.find((o) => o.id === x.id); if (a) { a.deleted = true; a.updatedAt = nowIso(); persist(); } return { ok: true }; }
+      case "removeAgent": { const a = D.agents.find((o) => o.id === x.id); if (a) { a.deleted = true; a.updatedAt = nowIso(); } return { ok: true }; }
+    }
+    throw new Error("모르는 요청: " + action);
+  }
+  async function callRead(action, x) {
+    switch (action) {
       case "addrLookup": {
         const g = await geocode(String(x.address || "").slice(0, 200));
         if (!g || g.none) return { ok: true, found: false };
@@ -228,7 +252,11 @@
     const geo = {}; if (d.geo && typeof d.geo === "object") Object.keys(d.geo).forEach((id) => { const g = d.geo[id]; if (okId(id) && g && typeof g === "object") geo[id] = { lat: num(g.lat) == null ? null : num(g.lat), lng: num(g.lng) == null ? null : num(g.lng), q: g.q === "대략" ? "대략" : g.q === "없음" ? "없음" : "정확", addr: str(g.addr, 300) || "" }; });
     const cond = Object.assign({}, defaultCond); if (d.cond && typeof d.cond === "object") Object.keys(defaultCond).forEach((k) => { if (d.cond[k] != null) cond[k] = (k === "moveBy" || k === "near") ? str(d.cond[k], 300) : (num(d.cond[k]) == null ? defaultCond[k] : num(d.cond[k])); });
     const ref = d.ref && num(d.ref.lat) != null && num(d.ref.lng) != null ? { name: str(d.ref.name, 40) || "기준 장소", lat: num(d.ref.lat), lng: num(d.ref.lng), q: "정확", addr: str(d.ref.addr, 300) || "" } : null;
-    const photos = {}; if (j.photos && typeof j.photos === "object") Object.keys(j.photos).forEach((id) => { const u = j.photos[id]; if (/^lpp?:p[a-z0-9]{1,40}$/.test(id) && typeof u === "string" && /^data:(image\/[a-z0-9.+-]+|application\/pdf);base64,/.test(u)) photos[id] = u; });
+    // 받은 사진: 그림 칸(lp:)은 jpeg·png·webp·gif·heic만, PDF 칸(lpp:)은 PDF만. SVG는 스크립트를 품을 수 있어 받지 않는다(검토 2026-11-20 A). 한 장 약 15MB까지
+    const photos = {}; if (j.photos && typeof j.photos === "object") Object.keys(j.photos).forEach((id) => { const u = j.photos[id]; if (typeof u !== "string" || u.length > 20e6) return;
+      if (/^lp:p[a-z0-9]{1,40}$/.test(id) && /^data:image\/(jpeg|png|webp|gif|heic|heif);base64,/.test(u)) photos[id] = u;
+      else if (/^lpp:p[a-z0-9]{1,40}$/.test(id) && /^data:application\/pdf;base64,/.test(u)) photos[id] = u; });
+    if (items.length > 2000) throw new Error("집이 너무 많은 파일이에요(2000곳까지)");
     const move = d.move && window.HHMove ? window.HHMove.normalize(d.move) : null;
     return { items: items, comments: comments, agents: agents, geo: geo, cond: cond, ref: ref, photos: photos, move: move };
   }
@@ -236,10 +264,9 @@
   async function importFile(file, mode) {
     let j; try { j = JSON.parse(await file.text()); } catch (e) { throw new Error("파일을 읽지 못했어요(JSON이 아니에요)"); }
     const inc = cleanIn(j);
-    for (const id of Object.keys(inc.photos)) { try { const b = await dataToBlob(inc.photos[id]); await tx("readwrite", (s) => s.put(b, id)); } catch (e) { /* 사진 하나 실패해도 계속 */ } }
+    reload(); const before = JSON.stringify(D);
     let added = 0, changed = 0;
     if (mode === "replace") {
-      for (const id of photoIds()) if (!inc.photos[id]) await assets.delete(id);
       D = { v: V, items: inc.items, comments: inc.comments, agents: inc.agents, geo: inc.geo, cond: inc.cond, ref: inc.ref, move: inc.move || undefined };
       added = inc.items.filter((x) => !x.deleted).length;
     } else {
@@ -251,10 +278,15 @@
       });
       inc.comments.forEach((c) => { const o = D.comments.find((x) => x.id === c.id); if (!o) D.comments.push(c); else if (c.deleted) o.deleted = true; });
       inc.agents.forEach((a) => { const i = D.agents.findIndex((o) => o.id === a.id); if (i < 0) D.agents.push(a); else if (tm(a.updatedAt) > tm(D.agents[i].updatedAt)) D.agents[i] = a; });
-      if (!D.ref && inc.ref) D.ref = inc.ref;
+      if (!D.ref && inc.ref && inc.ref.name !== "예시 회사") D.ref = inc.ref; // 예시 기준 장소는 합치기로 되살리지 않음
       if (inc.move) D.move = D.move && window.HHMove ? window.HHMove.merge(D.move, inc.move) : inc.move;
     }
-    persist(); if (MV) MV.render();
+    const old = mode === "replace" ? new Set(JSON.parse(before).items.flatMap((it) => Array.isArray(it.images) ? it.images : [])) : null;
+    try { persist(); } catch (e) { D = JSON.parse(before); throw e; }
+    const used = new Set(photoIds());
+    for (const id of Object.keys(inc.photos)) { if (!used.has(id)) continue; try { const b = await dataToBlob(inc.photos[id]); await tx("readwrite", (s) => s.put(b, id)); } catch (e) { /* 사진 하나 실패해도 계속 */ } }
+    if (old) for (const id of old) if (!used.has(id)) await assets.delete(id);
+    if (MV) MV.render();
     return { added: added, changed: changed };
   }
 
@@ -294,7 +326,9 @@
     // 예시·전체 지우기
     const delBox = h("div");
     const exBtn2 = ex ? h("button", { class: "btn", type: "button", text: "예시 집 " + ex + "곳 지우기", onclick: () => ask(delBox, "예시 집과 그 의견·예시 중개사를 지울까요?", "지우기", async () => {
-      D.items = D.items.filter((x) => !/^ex-/.test(x.id)); D.comments = D.comments.filter((c) => !/^ex-/.test(c.itemId)); D.agents = D.agents.filter((a) => !/^aex-/.test(a.id));
+      reload(); const t = nowIso(); // 지운 표시만 남긴다(상대가 예시가 든 파일을 보내 합쳐도 되살아나지 않게, 검토 2026-11-20 C)
+      D.items.forEach((x) => { if (/^ex-/.test(x.id) && !x.deleted) { Object.keys(x).forEach((k) => { if (!/^(id|name|createdAt)$/.test(k)) delete x[k]; }); x.deleted = true; x.updatedAt = t; } });
+      D.comments.forEach((c) => { if (/^ex-/.test(c.itemId)) c.deleted = true; }); D.agents.forEach((a) => { if (/^aex-/.test(a.id)) { a.deleted = true; a.updatedAt = t; } });
       Object.keys(D.geo).forEach((k) => { if (/^ex-/.test(k)) delete D.geo[k]; });
       if (D.ref && D.ref.name === "예시 회사") D.ref = null;
       persist(); H.refresh(); drawData("예시를 지웠어요. «조건 고치기»에서 기준 장소(회사·역)를 정해 보세요.");
@@ -377,8 +411,9 @@
   }
 
   load();
+  window.addEventListener("storage", (e) => { if (e.key === DATA_KEY && H) { reload(); H.refresh(); if (MV) MV.render(); } });
   // 이사 탭(../move.js): 이 기기 D.move에 저장. 앱 코드가 window.HH_MOVE를 보고 «이사» 단추를 켠다
-  const MV = window.HHMove ? window.HHMove.create({ load: () => D.move || null, save: (m) => { D.move = m; persist(); }, toast: (t) => { if (H) H.toast(t); } }) : null;
+  const MV = window.HHMove ? window.HHMove.create({ load: () => { reload(); return D.move || null; }, save: (m) => { change(() => { D.move = m; }); }, toast: (t) => { if (H) H.toast(t); } }) : null;
   window.HH_MOVE = MV;
   window.HH_LOCAL = { defaultCond: defaultCond, call: call, assets: assets, imgSrc: (p) => URLS.get(p) || "", ready: ready };
 })();
