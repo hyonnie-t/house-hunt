@@ -7,6 +7,7 @@
 - `index.html` 화면과 코드 전부(외부 라이브러리 없음, 글꼴만 구글 폰트). 데이터 층은 맨 아래 «저장소 연결»: 앱스 스크립트 웹 앱에 text/plain POST. 30초마다·탭에 돌아올 때 새로 읽는다. 마지막에 쓴 사람이 이긴다.
 - `apps-script/Code.gs` 시트(`집 찾기 (백엔드)`, ID 1USyz0O6FGTJSzgwSZRsk8JJSAEzfB2QdNpDxFW3Lmy8)에 붙은 스크립트(ID 13jvApgSK23NG0thqS2_t9ts5i4KxkUyKH3y4KTsWOZdDYuzotSYPETIF, 편집기 파일명 «코드»). 탭 `집`·`설정`. 지우기는 `deleted`=TRUE 표시만 하고 줄은 남긴다.
 - `plans/` 해링턴 평면도(상대 경로로 보여 줌). 사진 업로드는 아직 없다.
+- `img/househunt-og.jpg` 공유 미리보기 그림(2026-11-20, 힉스필드, og:image 1200×630, 원본 `클로드작업\산출물\생성미디어\2026-11-20_힉스필드-털기\`). 화면에는 안 쓰임.
 
 ## 규칙
 - 비밀번호는 스크립트 속성 `HOUSE_KEY`에 효니가 직접 넣는다. 코드·레포·답변·로그에 쓰지 않는다. 웹 앱 주소는 레포에 있어도 된다(비밀번호가 문이다).
