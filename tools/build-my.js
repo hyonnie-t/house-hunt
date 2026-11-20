@@ -17,9 +17,10 @@ function repRe(re, b) { if (!re.test(s)) { console.error("✗ 못 찾음: " + re
 
 // 머리: 제목·설명·공유 미리보기·아이콘·manifest
 rep('<meta name="robots" content="noindex">', "");
-rep("<title>집 비교판</title>", "<title>집 비교판 (누구나 쓰는 판)</title>");
+rep("<title>새 집 준비판</title>", "<title>집 비교판 (누구나 쓰는 판)</title>");
+rep("<h1>새 집 준비판</h1>", "<h1>집 비교판</h1>"); // 개인판 이름만 바꿈(2026-11-20), 범용판은 블로그 글과 같은 이름 유지
 rep('<meta name="description" content="이사 갈 집 후보를 조건·가격·위치로 한눈에 비교하는 판">', '<meta name="description" content="이사 갈 집 후보를 조건·가격·위치로 한눈에 비교하는 판. 가입 없이 이 기기에 저장하고, 파일로 주고받아 둘이 같이 봐요.">');
-rep('<meta property="og:title" content="집 비교판">', '<meta property="og:title" content="집 비교판 — 이사 갈 집 한눈에 비교">');
+rep('<meta property="og:title" content="새 집 준비판">', '<meta property="og:title" content="집 비교판 — 이사 갈 집 한눈에 비교">');
 rep('<meta property="og:description" content="이사 갈 집 후보를 조건·가격·위치로 한눈에 비교하는 판">', '<meta property="og:description" content="가입 없이 쓰는 집 후보 비교판. 조건·월 부담·지도·의견을 한곳에.">');
 rep('content="https://hyonnie-t.github.io/house-hunt/"', 'content="https://hyonnie-t.github.io/house-hunt/my/"');
 rep('href="apple-touch-icon.png"', 'href="../apple-touch-icon.png"');

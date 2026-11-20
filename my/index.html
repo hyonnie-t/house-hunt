@@ -368,7 +368,18 @@ td.who .last-cmt { max-width: 360px; }
 .mapbox { height: min(68vh, 640px); min-height: 320px; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; box-shadow: var(--shadow); background: var(--accent-soft); }
 #mapNote { margin-top: var(--space-2); }
 .wrap.view-map .tablebox, .wrap.view-map .cards { display: none !important; }
-/* 이사 탭(move.js, 2026-11-20): 집 목록·찾기·필터를 숨기고 보기 단추(목록/지도/이사)만 남긴다 */
+/* 큰 탭(2026-11-20 주인 «이사 버튼을 더 크게 상단으로»): 집 찾기 | 이사 준비. 이사 쪽에선 집 목록용 칸·단추를 모두 숨긴다 */
+.modes { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-1); padding: var(--space-1); margin-bottom: var(--space-3); background: var(--surface); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); }
+.modes[hidden] { display: none; }
+.modes button { display: flex; align-items: center; justify-content: center; gap: var(--space-2); min-height: 56px; border: 0; border-radius: 8px; background: transparent; color: var(--sub); font: inherit; font-size: 1.05rem; font-weight: 700; cursor: pointer; transition: background-color .2s ease-out, color .2s ease-out; }
+.modes button:hover { background: var(--accent-soft); color: var(--ink); }
+.modes button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+.modes .mi { font-size: 1.25rem; line-height: 1; }
+.modes small { font-size: .8rem; font-weight: 600; opacity: .85; }
+.modes small:empty { display: none; }
+@media (max-width: 520px) { .modes button { min-height: 48px; font-size: .98rem; gap: var(--space-1); } .modes small { display: none; } }
+@media (prefers-reduced-motion: reduce) { .modes button { transition: none; } }
+.wrap.view-move #btnAgents, .wrap.view-move #btnCond, .wrap.view-move #btnAdd, .wrap.view-move .filters { display: none !important; }
 .wrap.view-move .tablebox, .wrap.view-move .cards, .wrap.view-move .compare, .wrap.view-move #emptyBox, .wrap.view-move .search, .wrap.view-move #newsBar, .wrap.view-move .filters > :not(.seg:first-child), .wrap.view-move #condChips, .wrap.view-move #btnCondShow { display: none !important; }
 .movewrap { animation: rise .25s ease-out both; }
 @media (prefers-reduced-motion: reduce) { .movewrap { animation: none; } }
@@ -402,6 +413,11 @@ td.who .last-cmt { max-width: 360px; }
     </div>
   </header>
 
+  <nav class="modes" id="modeBar" aria-label="할 일 고르기" hidden>
+    <button type="button" id="modeFind" aria-pressed="true"><span class="mi" aria-hidden="true">🏠</span>집 찾기<small id="modeFindSub"></small></button>
+    <button type="button" id="viewMoveBtn" data-view="move" aria-pressed="false"><span class="mi" aria-hidden="true">📦</span>이사 준비<small id="modeMoveSub"></small></button>
+  </nav>
+
   <div class="bar" id="topBar">
     <div class="news" id="newsBar" hidden role="status"></div>
     <button type="button" class="chip condtoggle" id="btnCondShow" aria-expanded="false" aria-controls="condChips"></button>
@@ -415,7 +431,6 @@ td.who .last-cmt { max-width: 360px; }
       <div class="seg" role="group" aria-label="보기">
         <button type="button" data-view="list" aria-pressed="true">목록</button>
         <button type="button" data-view="map" aria-pressed="false">지도</button>
-        <button type="button" data-view="move" aria-pressed="false" id="viewMoveBtn" hidden>이사</button>
       </div>
       <div class="seg" role="group" aria-label="상태">
         <button type="button" data-status="live" aria-pressed="true">살아 있는 후보</button>
@@ -882,6 +897,7 @@ td.who .last-cmt { max-width: 360px; }
   }
 
   function render() {
+    try { modeSubs(); } catch (e) { /* 이사 부품 준비 전(처음 그리기)엔 건너뜀 */ }
     const c = S.cond;
     const chips = $("condChips"); chips.replaceChildren(
       el("span", { class: "chip" }, "전용 ", el("b", { class: "num", text: areaTxt(c.minArea, 0) }), "↑"),
@@ -1038,9 +1054,22 @@ td.who .last-cmt { max-width: 360px; }
     });
   }
   const MOVE = window.HH_MOVE || null;
-  if (MOVE) $("viewMoveBtn").hidden = false;
+  if (MOVE) $("modeBar").hidden = false;
+  let lastFind = "list"; // 집 찾기로 돌아갈 때 목록·지도 중 마지막 것
+  $("modeFind").addEventListener("click", () => setView(lastFind));
+  document.addEventListener("hh-move-render", () => { try { modeSubs(); } catch (e) { /* 넘어감 */ } });
+  // 큰 탭 작은 글씨: 이사 쪽은 D-day, 집 찾기 쪽은 살아 있는 후보 수
+  function modeSubs() {
+    if (!MOVE) return;
+    const m = MOVE.info ? MOVE.info() : null;
+    $("modeMoveSub").textContent = m && m.left != null ? (m.left > 0 ? "D-" + m.left : m.left === 0 ? "오늘" : "") : "";
+    const live = (S.items || []).filter((x) => x.status !== "탈락").length;
+    $("modeFindSub").textContent = live ? "후보 " + live : "";
+  }
   function setView(v) {
     if (v === "move" && !MOVE) v = "list";
+    if (v !== "move") lastFind = v;
+    if (MOVE) $("modeFind").setAttribute("aria-pressed", String(v !== "move"));
     MAPV.on = v === "map";
     const mv = v === "move";
     $("moveWrap").hidden = !mv;

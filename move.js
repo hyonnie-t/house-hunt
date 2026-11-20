@@ -100,7 +100,7 @@
   function create(opt) {
     opt = opt || {};
     const TPL = Array.isArray(opt.template) ? opt.template : TEMPLATE;
-    let D = null, root = null, busy = 0;
+    let D = null, root = null, busy = 0, editing = null;
     const toast = (t) => { try { if (opt.toast) opt.toast(t); } catch (e) { /* 토스트 없음 */ } };
     const get = () => { if (!D) D = normalize(opt.load ? opt.load() : null, TPL); return D; };
     const who = () => { try { return String(opt.who ? opt.who() || "" : "").slice(0, 20); } catch (e) { return ""; } };
@@ -139,7 +139,37 @@
       const del = h("button", { type: "button", class: "btn ghost mv-x", "aria-label": x.title + " 지우기", title: x.custom ? "지우기" : "숨기기", text: "✕", onclick: () => { x.del = true; x.at = tick(x.at); commit(x.custom ? "지웠어요" : "숨겼어요 · «숨긴 일 다시 보기»로 되살릴 수 있어요"); } });
       const when = isNaN(t0) ? null : h("span", { class: "small muted num", text: ymd(t0 + x.off * DAY) });
       const by = x.done && x.by ? h("span", { class: "mv-by", text: x.by + " 체크" }) : null;
-      return h("li", { class: "mv-task" + (x.done ? " done" : "") }, [cb, h("label", { for: "mv_" + x.id, class: "mv-title" }, [document.createTextNode(x.title), x.custom ? h("span", { class: "mv-mine", text: "내 할 일" }) : null, by]), when, memo, del]);
+      if (editing === x.id) return editRow(x);
+      const ed = h("button", { type: "button", class: "btn ghost mv-ed", "aria-label": x.title + " 고치기", title: "고치기", text: "✎", onclick: () => { editing = x.id; render(); const n = root.querySelector("#mveT"); if (n) n.focus(); } });
+      return h("li", { class: "mv-task" + (x.done ? " done" : "") }, [cb, h("label", { for: "mv_" + x.id, class: "mv-title" }, [document.createTextNode(x.title), x.custom ? h("span", { class: "mv-mine", text: "내 할 일" }) : null, by]), when, memo, del, ed]);
+    }
+    // 할 일 고치기(2026-11-20 효니 «할 일 수정할 수 있게»): 제목·때(묶음)·메모. 묶음을 안 바꾸면 원래 날 수(예: D-92)를 그대로 둔다
+    function editRow(x) {
+      const gi = (() => { let k = 0; GROUPS.forEach((g, i) => { if (x.off >= g[0]) k = i; }); return k; })();
+      const ti = h("input", { id: "mveT", value: x.title, maxlength: "120", "aria-label": "할 일 제목" });
+      const sel = h("select", { id: "mveG", "aria-label": "언제" }, GROUPS.map((g, i) => h("option", { value: String(i), text: g[1] })));
+      sel.value = String(gi);
+      const me = h("input", { id: "mveM", value: x.memo || "", maxlength: "300", placeholder: "메모", "aria-label": "메모" });
+      const save = () => {
+        const t = ti.value.trim(); if (!t) { ti.focus(); return; }
+        x.title = t.slice(0, 120); x.memo = me.value.trim().slice(0, 300);
+        if (Number(sel.value) !== gi) x.off = GROUPS[Number(sel.value)][0];
+        x.at = tick(x.at); editing = null; commit("고쳤어요");
+      };
+      const cancel = () => { editing = null; render(); };
+      [ti, me].forEach((n) => n.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); save(); } else if (e.key === "Escape") { e.preventDefault(); cancel(); } }));
+      return h("li", { class: "mv-task mv-editing" }, [h("div", { class: "mv-edit" }, [ti, h("div", { class: "mv-addrow" }, [sel, me]), h("div", { class: "mv-addrow" }, [h("button", { type: "button", class: "btn primary", text: "저장", onclick: save }), h("button", { type: "button", class: "btn ghost", text: "취소", onclick: cancel })])])]);
+    }
+    // 접기(2026-11-20 효니 «토글로 접게»): 기기마다 기억(localStorage, 주소별). 기본은 펼침, 다 끝난 지난 묶음만 접힘
+    const FOLD_KEY = "mvfold:" + location.pathname;
+    let FOLD = {}; try { FOLD = JSON.parse(localStorage.getItem(FOLD_KEY) || "{}") || {}; } catch (e) { FOLD = {}; }
+    const isOpen = (key, def) => (key in FOLD ? !!FOLD[key] : def);
+    function foldBox(key, def, cls, sum, kids, force) {
+      const dt = h("details", { class: cls, open: force || isOpen(key, def) }, [h("summary", null, sum)].concat(kids));
+      const first = dt.open; let seen = false;
+      // 처음 그릴 때 open 때문에 나는 toggle은 사람이 누른 게 아니라 기억하지 않는다(안 그러면 «다 끝난 묶음 접힘» 기본값이 굳어 버림)
+      dt.addEventListener("toggle", () => { if (!seen && dt.open === first) { seen = true; return; } seen = true; FOLD[key] = dt.open; try { localStorage.setItem(FOLD_KEY, JSON.stringify(FOLD)); } catch (e) { /* 기억 못 해도 됨 */ } });
+      return dt;
     }
     function tasks(d) {
       const t0 = dateUTC(d.date), today = todayUTC();
@@ -152,10 +182,12 @@
         const gStart = t0 + g[0] * DAY, gEnd = t0 + Math.min(nextOff, 366) * DAY;
         const state = isNaN(t0) ? "" : today >= gEnd ? "지난 때" : today >= gStart ? "지금" : "";
         const left = list.filter((x) => !x.done).length;
-        box.append(h("div", { class: "mv-group" + (state === "지금" ? " now" : "") }, [
-          h("div", { class: "mv-gh" }, [h("b", { text: g[1] }), isNaN(t0) ? null : h("span", { class: "small muted num", text: ymd(gStart) + (g[0] === 0 ? "" : " 즈음") }), state ? h("span", { class: "mv-state" + (state === "지난 때" && left ? " late" : ""), text: state === "지난 때" && left ? "남은 일 " + left : state }) : null]),
-          h("ul", null, list.map((x) => taskRow(x, t0)))
-        ]));
+        const tag = state === "지난 때" && left ? "남은 일 " + left : state ? state : left === 0 ? "다 끝" : left + "개 남음";
+        const hasEdit = list.some((x) => x.id === editing);
+        const g0 = foldBox("g" + g[0], left > 0 || state === "지금", "mv-group" + (state === "지금" ? " now" : ""),
+          [h("span", { class: "mv-gh" }, [h("b", { text: g[1] }), isNaN(t0) ? null : h("span", { class: "small muted num", text: ymd(gStart) + (g[0] === 0 ? "" : " 즈음") }), h("span", { class: "mv-state" + (state === "지난 때" && left ? " late" : "") + (left === 0 ? " done" : ""), text: tag })])],
+          [h("ul", null, list.map((x) => taskRow(x, t0)))], hasEdit);
+        box.append(g0);
       });
       // 내 할 일 더하기
       const title = h("input", { id: "mvNewT", placeholder: "예: 에어컨 이전 설치 예약", maxlength: "120" });
@@ -273,9 +305,11 @@
       if (!root) return;
       D = null; stale = false; const d = get();
       const y = window.scrollY, act = document.activeElement && document.activeElement.id;
-      root.replaceChildren(head(d), tasks(d), opt.extras ? money(d) : null, quotes(d), opt.extras ? notes(d) : null);
+      const wrap = (sec, key) => { if (!sec) return null; const h3 = sec.querySelector("h3"); const kids = [...sec.childNodes].filter((n) => n !== h3); return foldBox("s-" + key, true, sec.className + " mv-sec", [h3], kids, key === "tasks" && editing); };
+      root.replaceChildren(head(d), wrap(tasks(d), "tasks"), opt.extras ? wrap(money(d), "money") : null, wrap(quotes(d), "quotes"), opt.extras ? wrap(notes(d), "notes") : null);
       if (act && act.indexOf("mv") === 0) { const n = root.querySelector("#" + act); if (n) n.focus({ preventScroll: true }); }
       window.scrollTo(0, y);
+      try { document.dispatchEvent(new CustomEvent("hh-move-render")); } catch (e) { /* 앱이 큰 탭 글씨(D-day)를 다시 씀 */ }
     }
     // 바깥(30초 다시 읽기)에서 부를 때: 글을 쓰는 중이거나 사진을 올리는 중이면 건너뛴다(쓰던 글이 지워지지 않게)
     // 건너뛰면 stale로 적어 두고, 칸에서 나가거나 올리기가 끝나면 그때 그린다(안 그러면 다음 읽기에 차이가 없어 영영 안 그려짐, 검토 2026-11-20)
@@ -293,7 +327,9 @@
       if (bound !== el) { bound = el; el.addEventListener("focusout", later); }
       render();
     }
-    return { mount: mount, render: render, refresh: refresh, normalize: (x) => normalize(x, TPL), merge: (a, b) => merge(a, b, TPL), blank: () => blank(TPL) };
+    // 큰 탭 글씨용: 이사까지 남은 날(날짜 없으면 null)·할 일 수
+    function info() { const d = normalize(opt.load ? opt.load() : null, TPL), t0 = dateUTC(d.date), live = d.tasks.filter((x) => !x.del); return { left: isNaN(t0) ? null : Math.round((t0 - todayUTC()) / DAY), total: live.length, done: live.filter((x) => x.done).length }; }
+    return { mount: mount, render: render, refresh: refresh, info: info, normalize: (x) => normalize(x, TPL), merge: (a, b) => merge(a, b, TPL), blank: () => blank(TPL) };
   }
   // 모양: 앱의 :root 토큰(--space-*·색)을 그대로 쓴다. 할 일을 끝내면 줄이 옅어지고 글자에 줄이 그어진다(짧은 전환)
   let styled = false;
@@ -307,7 +343,12 @@
       ".mv-tasks,.mv-quotes,.mv-money,.mv-notes{margin-top:var(--space-4)}.mv-tasks h3,.mv-quotes h3,.mv-money h3,.mv-notes h3{margin:0 0 var(--space-2);font-size:1.05rem}",
       ".mv-group{border:1px solid var(--line);border-radius:12px;background:var(--surface);margin-bottom:var(--space-2);overflow:hidden}",
       ".mv-group.now{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}",
-      ".mv-gh{display:flex;gap:var(--space-2);align-items:baseline;padding:var(--space-2) var(--space-3);background:var(--bg);border-bottom:1px solid var(--line)}",
+      ".mv-group>summary{list-style:none;cursor:pointer;background:var(--bg);border-bottom:1px solid var(--line)}.mv-group:not([open])>summary{border-bottom:0}.mv-group>summary::-webkit-details-marker,.mv-sec>summary::-webkit-details-marker{display:none}",
+      ".mv-gh{display:flex;gap:var(--space-2);align-items:baseline;padding:var(--space-2) var(--space-3)}.mv-gh::before,.mv-sec>summary h3::before{content:\"▸\";display:inline-block;color:var(--sub);transition:transform .2s ease-out}.mv-group[open] .mv-gh::before,.mv-sec[open]>summary h3::before{transform:rotate(90deg)}",
+      ".mv-sec>summary{list-style:none;cursor:pointer}.mv-sec>summary h3{display:flex;gap:var(--space-2);align-items:center}.mv-sec>summary:hover h3,.mv-group>summary:hover b{color:var(--accent)}",
+      ".mv-state.done{color:var(--sub);font-weight:500}",
+      ".mv-ed{grid-column:4;grid-row:2;padding:var(--space-1) var(--space-2);color:var(--sub)}.mv-task .mv-x,.mv-task .mv-ed{border-color:transparent;background:transparent}.mv-task .mv-x:hover,.mv-task .mv-ed:hover{border-color:var(--line)}",
+      ".mv-editing{display:block}.mv-edit{display:grid;gap:var(--space-2)}.mv-edit>input{border:1px solid var(--accent);border-radius:8px;padding:var(--space-2);background:var(--bg);font:inherit;font-weight:600}",
       ".mv-state{font-size:.75rem;font-weight:600;color:var(--accent);margin-left:auto}.mv-state.late{color:var(--warn)}",
       ".mv-group ul{list-style:none;margin:0;padding:0}",
       ".mv-task{display:grid;grid-template-columns:auto 1fr auto auto;gap:var(--space-1) var(--space-2);align-items:center;padding:var(--space-2) var(--space-3);border-top:1px solid var(--line);transition:opacity .2s}",
@@ -347,7 +388,7 @@
       ".mv-picw{position:relative}.mv-pic{display:grid;place-items:center;width:72px;height:72px;border:1px solid var(--line);border-radius:8px;overflow:hidden;padding:0;background:var(--bg);cursor:zoom-in;color:var(--sub);font-weight:700;text-decoration:none}",
       ".mv-pic img{width:100%;height:100%;object-fit:cover}.mv-picx{position:absolute;top:-8px;right:-8px;width:24px;height:24px;border-radius:50%;border:1px solid var(--line);background:var(--surface);color:var(--sub);font-size:.7rem;cursor:pointer;padding:0}",
       ".mv-picadd{font-size:.85rem}",
-      "@media (prefers-reduced-motion: reduce){.mv-bar i,.mv-task{transition:none}}"
+      "@media (prefers-reduced-motion: reduce){.mv-bar i,.mv-task,.mv-gh::before,.mv-sec>summary h3::before{transition:none}}"
     ].join("");
     const s = document.createElement("style"); s.textContent = css; document.head.append(s);
   }

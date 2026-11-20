@@ -1,6 +1,6 @@
 {
-  "name": "집 비교판",
-  "short_name": "집 찾기",
+  "name": "새 집 준비판",
+  "short_name": "새 집",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
