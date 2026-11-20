@@ -30,7 +30,7 @@ rep('href: "vendor/leaflet/leaflet.css"', 'href: "../vendor/leaflet/leaflet.css"
 rep('src: "vendor/leaflet/leaflet.js"', 'src: "../vendor/leaflet/leaflet.js"');
 
 // 저장층: my/local.js를 앱 코드보다 먼저 읽는다. 백엔드 주소는 지운다
-rep('<script>\n(function () {\n  "use strict";', '<script src="local.js"></script>\n<script>\n(function () {\n  "use strict";');
+rep('<script>\n(function () {\n  "use strict";', '<script src="../move.js"></script>\n<script src="local.js"></script>\n<script>\n(function () {\n  "use strict";');
 repRe(/const API = "https:\/\/script\.google\.com\/macros\/s\/[^"]+";[^\n]*/, 'const API = ""; // 범용판은 서버 없음(my/local.js)');
 repRe(/const DEFAULT_COND = LOCAL \? LOCAL\.defaultCond : \{[^\n]*\};/, "const DEFAULT_COND = LOCAL.defaultCond;");
 // 기기 저장 이름을 개인판과 나눈다(같은 주소 hyonnie-t.github.io라 localStorage를 같이 씀)

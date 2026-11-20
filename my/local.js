@@ -4,6 +4,7 @@
  * - 글 데이터(집·조건·의견·중개사·위치): localStorage «hhmy_data» 하나
  * - 사진·PDF: IndexedDB «hhmy_photos»(사진은 긴 쪽 1600px JPEG로 줄여 저장). 집에는 «lp:id»(그림)·«lpp:id»(PDF)만 적는다
  * - 위치: 주소를 OpenStreetMap 노미나팀 검색에 보내 좌표를 얻는다(1초에 한 번, 이 기기에 저장). 주소 글자 말고는 보내지 않는다
+ * - 이사 탭: ../move.js(HHMove)를 D.move에 저장한다. 백업 파일에도 들어가고, 합치기는 HHMove.merge(할 일·견적마다 나중에 고친 쪽)
  * - 둘이 같이 쓰기: «백업» 창에서 파일로 내보내 상대에게 보내고, 상대는 «가져오기 → 합치기»(집마다 나중에 고친 쪽이 이김)
  */
 (function () {
@@ -199,7 +200,7 @@
   async function exportFile() {
     const photos = {};
     for (const id of photoIds()) { try { const b = await tx("readonly", (s) => s.get(id)); if (b) photos[id] = await blobToData(b); } catch (e) { /* 빠진 사진은 넘어감 */ } }
-    const out = { app: "house-hunt-my", v: V, exportedAt: nowIso(), data: { items: D.items, cond: D.cond, ref: D.ref || null, geo: D.geo, comments: D.comments, agents: D.agents }, photos: photos };
+    const out = { app: "house-hunt-my", v: V, exportedAt: nowIso(), data: { items: D.items, cond: D.cond, ref: D.ref || null, geo: D.geo, comments: D.comments, agents: D.agents, move: D.move || null }, photos: photos };
     const b = new Blob([JSON.stringify(out)], { type: "application/json" });
     const d = new Date(), p2 = (n) => String(n).padStart(2, "0");
     const name = "집비교판_" + d.getFullYear() + p2(d.getMonth() + 1) + p2(d.getDate()) + "_" + p2(d.getHours()) + p2(d.getMinutes()) + ".json";
@@ -228,7 +229,8 @@
     const cond = Object.assign({}, defaultCond); if (d.cond && typeof d.cond === "object") Object.keys(defaultCond).forEach((k) => { if (d.cond[k] != null) cond[k] = (k === "moveBy" || k === "near") ? str(d.cond[k], 300) : (num(d.cond[k]) == null ? defaultCond[k] : num(d.cond[k])); });
     const ref = d.ref && num(d.ref.lat) != null && num(d.ref.lng) != null ? { name: str(d.ref.name, 40) || "기준 장소", lat: num(d.ref.lat), lng: num(d.ref.lng), q: "정확", addr: str(d.ref.addr, 300) || "" } : null;
     const photos = {}; if (j.photos && typeof j.photos === "object") Object.keys(j.photos).forEach((id) => { const u = j.photos[id]; if (/^lpp?:p[a-z0-9]{1,40}$/.test(id) && typeof u === "string" && /^data:(image\/[a-z0-9.+-]+|application\/pdf);base64,/.test(u)) photos[id] = u; });
-    return { items: items, comments: comments, agents: agents, geo: geo, cond: cond, ref: ref, photos: photos };
+    const move = d.move && window.HHMove ? window.HHMove.normalize(d.move) : null;
+    return { items: items, comments: comments, agents: agents, geo: geo, cond: cond, ref: ref, photos: photos, move: move };
   }
   const tm = (s) => Date.parse(s || 0) || 0;
   async function importFile(file, mode) {
@@ -238,7 +240,7 @@
     let added = 0, changed = 0;
     if (mode === "replace") {
       for (const id of photoIds()) if (!inc.photos[id]) await assets.delete(id);
-      D = { v: V, items: inc.items, comments: inc.comments, agents: inc.agents, geo: inc.geo, cond: inc.cond, ref: inc.ref };
+      D = { v: V, items: inc.items, comments: inc.comments, agents: inc.agents, geo: inc.geo, cond: inc.cond, ref: inc.ref, move: inc.move || undefined };
       added = inc.items.filter((x) => !x.deleted).length;
     } else {
       // 합치기: 집·중개사는 나중에 고친 쪽, 의견은 모두 모으고 지운 표시는 남긴다. 조건·기준 장소는 이 기기 것을 그대로 둔다
@@ -250,8 +252,9 @@
       inc.comments.forEach((c) => { const o = D.comments.find((x) => x.id === c.id); if (!o) D.comments.push(c); else if (c.deleted) o.deleted = true; });
       inc.agents.forEach((a) => { const i = D.agents.findIndex((o) => o.id === a.id); if (i < 0) D.agents.push(a); else if (tm(a.updatedAt) > tm(D.agents[i].updatedAt)) D.agents[i] = a; });
       if (!D.ref && inc.ref) D.ref = inc.ref;
+      if (inc.move) D.move = D.move && window.HHMove ? window.HHMove.merge(D.move, inc.move) : inc.move;
     }
-    persist();
+    persist(); if (MV) MV.render();
     return { added: added, changed: changed };
   }
 
@@ -296,13 +299,13 @@
       if (D.ref && D.ref.name === "예시 회사") D.ref = null;
       persist(); H.refresh(); drawData("예시를 지웠어요. «조건 고치기»에서 기준 장소(회사·역)를 정해 보세요.");
     }) }) : null;
-    const wipeBtn = h("button", { class: "btn danger", type: "button", text: "이 기기 기록 모두 지우기", onclick: () => ask(delBox, "집·의견·중개사·사진을 이 기기에서 모두 지울까요? 되돌릴 수 없어요.", "모두 지우기", async () => {
+    const wipeBtn = h("button", { class: "btn danger", type: "button", text: "이 기기 기록 모두 지우기", onclick: () => ask(delBox, "집·의견·중개사·사진·이사 할 일을 이 기기에서 모두 지울까요? 되돌릴 수 없어요.", "모두 지우기", async () => {
       for (const id of photoIds()) await assets.delete(id);
-      D = { v: V, items: [], comments: [], agents: [], geo: {}, cond: Object.assign({}, defaultCond), ref: null }; persist(); H.refresh(); drawData("모두 지웠어요.");
+      D = { v: V, items: [], comments: [], agents: [], geo: {}, cond: Object.assign({}, defaultCond), ref: null }; persist(); if (MV) MV.render(); H.refresh(); drawData("모두 지웠어요.");
     }) });
     body.append(
       h("p", { class: "hint", text: "이 판은 회원가입 없이 이 기기 브라우저에만 저장돼요. 서버로 보내지 않아요(지도 위치를 찾을 때 주소 글자만 OpenStreetMap에 보내요). 브라우저 기록을 지우거나 다른 기기에서 열면 비어 있으니, 가끔 파일로 내보내 두세요." }),
-      sec("내보내기", "집·의견·중개사·조건·사진을 파일 하나(.json)로 받아요. 같이 집을 보는 사람에게 카톡·메일로 보내도 돼요.", [h("div", { class: "actions" }, [exBtn])]),
+      sec("내보내기", "집·의견·중개사·조건·사진·이사 할 일을 파일 하나(.json)로 받아요. 같이 집을 보는 사람에게 카톡·메일로 보내도 돼요.", [h("div", { class: "actions" }, [exBtn])]),
       sec("가져오기", "«합치기»는 집마다 더 최근에 고친 쪽을 남기고, 서로 단 의견은 모두 모아요. 둘이 번갈아 고치고 파일을 주고받으면 같은 판을 볼 수 있어요.", [h("div", { class: "actions" }, [mergeBtn, replBtn, pick]), askBox]),
       sec("정리", null, [h("div", { class: "actions" }, [exBtn2, wipeBtn]), delBox]),
       msg
@@ -374,5 +377,8 @@
   }
 
   load();
+  // 이사 탭(../move.js): 이 기기 D.move에 저장. 앱 코드가 window.HH_MOVE를 보고 «이사» 단추를 켠다
+  const MV = window.HHMove ? window.HHMove.create({ load: () => D.move || null, save: (m) => { D.move = m; persist(); }, toast: (t) => { if (H) H.toast(t); } }) : null;
+  window.HH_MOVE = MV;
   window.HH_LOCAL = { defaultCond: defaultCond, call: call, assets: assets, imgSrc: (p) => URLS.get(p) || "", ready: ready };
 })();
