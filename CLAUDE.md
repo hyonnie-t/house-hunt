@@ -134,7 +134,7 @@
 | 검색 «관심» | ✓ 더는 걸리지 않음(우선순위 글자로 찾기) |
 | 정기 검색 house-search | ✓ 알림 기준을 우선순위로 |
 
-## 범용판 (/my/, 2026-11-20)
+### 2026-11-20 범용판 (/my/)
 주소 https://hyonnie-t.github.io/house-hunt/my/ . 출처: 효니 말 «집 구하기 판은 범용으로 블로그에 공유»(2026-11-20, 원래 세션이 이 세션에 맡김). 방식은 «서버 없이 이 기기 저장 + 파일 내보내기·가져오기»(② 가벼운 판, 책장 `/my/`와 같은 생각. ① 시트 사본 방식은 효니가 고르면 나중에).
 - 화면 코드는 개인판 `index.html` 하나. `node tools/build-my.js`가 `my/index.html`을 만든다: 머리(제목·og·아이콘 `../`)·개인 문구(동네·금액·클로드 정기 검색·버팀목)를 표대로 바꾸고, localStorage 이름을 `hh_`→`hhmy_`(같은 주소 hyonnie-t.github.io라 개인판과 나눔), 백엔드 주소를 지우고, `my/local.js`를 앱 코드 앞에 읽힌다. 바꿀 글자를 못 찾거나 금지어(신대방·관악·효니·클로드·버팀목·2027-02·시트·스크립트 ID 등)가 남으면 멈춘다. **개인판 `index.html`을 고치면 PR 전에 `node tools/build-my.js`를 다시 돌려 `my/index.html`도 같이 커밋한다.**
 - `index.html`의 고리(`const LOCAL = window.HH_LOCAL || null`): `call()`이 LOCAL이면 `LOCAL.call`로, 사진 저장소 `S.assets`·`imgSrc`(`lp:`그림·`lpp:`PDF)·비밀번호 화면 건너뛰기·`fill` 대기 안 함·`source` «나»·`DEFAULT_COND`. 개인판에서는 LOCAL이 null이라 그대로다. 조건 칩 «만기»·«★ 동네»는 값이 비면 숨긴다(범용판 기본값이 비어 있음).
