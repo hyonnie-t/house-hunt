@@ -367,6 +367,10 @@ td.who .last-cmt { max-width: 360px; }
 .mapbox { height: min(68vh, 640px); min-height: 320px; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; box-shadow: var(--shadow); background: var(--accent-soft); }
 #mapNote { margin-top: var(--space-2); }
 .wrap.view-map .tablebox, .wrap.view-map .cards { display: none !important; }
+/* 이사 탭(move.js, 2026-11-20): 집 목록·찾기·필터를 숨기고 보기 단추(목록/지도/이사)만 남긴다 */
+.wrap.view-move .tablebox, .wrap.view-move .cards, .wrap.view-move .compare, .wrap.view-move #emptyBox, .wrap.view-move .search, .wrap.view-move #newsBar, .wrap.view-move .filters > :not(.seg:first-child), .wrap.view-move #condChips, .wrap.view-move #btnCondShow { display: none !important; }
+.movewrap { animation: rise .25s ease-out both; }
+@media (prefers-reduced-motion: reduce) { .movewrap { animation: none; } }
 .mapbox.leaflet-container { font: inherit; }
 .mapbox .leaflet-popup-content-wrapper, .mapbox .leaflet-popup-tip { background: var(--surface); color: var(--ink); }
 .mapbox .leaflet-popup-content { margin: var(--space-3); }
@@ -410,6 +414,7 @@ td.who .last-cmt { max-width: 360px; }
       <div class="seg" role="group" aria-label="보기">
         <button type="button" data-view="list" aria-pressed="true">목록</button>
         <button type="button" data-view="map" aria-pressed="false">지도</button>
+        <button type="button" data-view="move" aria-pressed="false" id="viewMoveBtn" hidden>이사</button>
       </div>
       <div class="seg" role="group" aria-label="상태">
         <button type="button" data-status="live" aria-pressed="true">살아 있는 후보</button>
@@ -490,6 +495,7 @@ td.who .last-cmt { max-width: 360px; }
     </table>
   </div>
   <div class="cards" id="cards"></div>
+  <section class="movewrap" id="moveWrap" hidden aria-label="이사 준비"></section>
   <section class="mapwrap" id="mapWrap" hidden aria-label="지도">
     <div class="map-legend">
       <span><i class="lg-live"></i>살아 있는 후보</span>
@@ -652,17 +658,20 @@ td.who .last-cmt { max-width: 360px; }
 
 <div class="toast" id="toast" hidden></div>
 
+<script src="move.js"></script>
 <script>
 (function () {
   "use strict";
-  const DEFAULT_COND = { minArea: 33, minRooms: 2, selfFunds: 8000, maxDeposit: 33000, monthlyTarget: 100, rate: 2.5, moveBy: "2027-02-21", near: "신대방, 신사동, 보라매, 신림, 대방" };
+  // 범용판(/my/)은 my/local.js가 window.HH_LOCAL을 먼저 만든다: 저장은 이 기기, 사진은 IndexedDB(2026-11-20)
+  const LOCAL = window.HH_LOCAL || null;
+  const DEFAULT_COND = LOCAL ? LOCAL.defaultCond : { minArea: 33, minRooms: 2, selfFunds: 8000, maxDeposit: 33000, monthlyTarget: 100, rate: 2.5, moveBy: "2027-02-21", near: "신대방, 신사동, 보라매, 신림, 대방" };
   const S = { items: [], cond: Object.assign({}, DEFAULT_COND), status: "live", kind: "all", sort: "score", pri: "all", tag: "all", q: "", sel: new Set(), db: null, assets: null, canWrite: true, editing: null, pending: [], keepPhotos: [], keepVideos: [], vUp: [], vRemoved: [], saving: false, loaded: false };
   let EMPTY_HTML = "";
   // 사진 주소: 드라이브에 올린 것은 «gd:파일id»(그림)·«gdp:파일id»(PDF)로 저장한다(2026-11-18). 그림은 드라이브 썸네일(긴 쪽 2000px)로 보여 준다
-  const imgSrc = (p) => /^gd:/.test(p) ? "https://drive.google.com/thumbnail?sz=w2000&id=" + encodeURIComponent(p.slice(3))
+  const imgSrc = (p) => LOCAL && /^lpp?:/.test(p) ? LOCAL.imgSrc(p) : /^gd:/.test(p) ? "https://drive.google.com/thumbnail?sz=w2000&id=" + encodeURIComponent(p.slice(3))
     : /^gdp:/.test(p) ? "https://drive.google.com/file/d/" + encodeURIComponent(p.slice(4)) + "/view"
     : /^(https?:|plans\/)/.test(p) ? p : "/_blob/" + p;
-  const isPdfId = (p) => typeof p === "object" ? /pdf/.test(p.type || "") : /^gdp:/.test(String(p));
+  const isPdfId = (p) => typeof p === "object" ? /pdf/.test(p.type || "") : /^(gdp|lpp):/.test(String(p));
   const CM = { list: [], agents: [], who: (() => { try { return localStorage.getItem("hh_who") || ""; } catch (e) { return ""; } })() };
   const $ = (id) => document.getElementById(id);
   const el = (tag, attrs, ...kids) => { const e = document.createElement(tag); if (attrs) for (const k in attrs) { if (k === "class") e.className = attrs[k]; else if (k === "text") e.textContent = attrs[k]; else if (k.startsWith("on")) e.addEventListener(k.slice(2), attrs[k]); else if (attrs[k] !== undefined && attrs[k] !== null) e.setAttribute(k, attrs[k]); } for (const c of kids) if (c != null) e.append(c); return e; };
@@ -879,8 +888,8 @@ td.who .last-cmt { max-width: 360px; }
       el("span", { class: "chip" }, "월세+관리비 ", el("b", { class: "num", text: fmt(c.monthlyTarget) }), " 내외"),
       el("span", { class: "chip" }, "자기 돈 ", el("b", { class: "num", text: won(c.selfFunds) })),
       el("span", { class: "chip" }, "금리 ", el("b", { class: "num", text: fmt(c.rate, 2) + "%" })),
-      el("span", { class: "chip" }, "만기 ", el("b", { class: "num", text: c.moveBy })),
-      el("span", { class: "chip" }, "★ ", c.near));
+      c.moveBy ? el("span", { class: "chip" }, "만기 ", el("b", { class: "num", text: c.moveBy })) : "",
+      c.near ? el("span", { class: "chip" }, "★ ", c.near) : ""); // 범용판은 비어 있을 수 있음(빈 칩 숨김)
     // 폰: 조건은 한 줄 요약으로 접어 두고 눌러서 펼친다
     const open = $("topBar").classList.contains("cond-open");
     $("btnCondShow").textContent = (open ? "▴ " : "▾ ") + "조건 · " + fmt(py(c.minArea), 0) + "평↑ · 방 " + fmt(c.minRooms) + "↑ · 보증금 " + won(c.maxDeposit) + "↓ · 월 " + fmt(c.monthlyTarget);
@@ -954,7 +963,7 @@ td.who .last-cmt { max-width: 360px; }
       eb.replaceChildren(...kids);
     } else if (eb.dataset.mode !== "base") { eb.innerHTML = EMPTY_HTML; }
     eb.dataset.mode = qTerms().length && list.length === 0 ? "q" : "base";
-    eb.hidden = !(S.loaded && list.length === 0) || MAPV.on;
+    eb.hidden = !(S.loaded && list.length === 0) || MAPV.on || !$("moveWrap").hidden;
     renderCompare();
     if (MAPV.on) renderMap();
   }
@@ -1005,8 +1014,36 @@ td.who .last-cmt { max-width: 360px; }
     });
     return MAPV.loading;
   }
+  // 이사 탭: window.HH_MOVE(move.js의 HHMove.create 결과)가 있을 때만 단추가 보인다. 범용판은 my/local.js가 만든다(2026-11-20)
+  // 개인판(2026-11-20, 효니 말 «남친도 체크해도 됨»·«계약서 사진도 올릴게»): 시트 탭 «이사»에 둘이 같이 저장. 돈 흐름·계약 메모(사진)까지.
+  // 할 일 틀은 시트에 들어 있어(공개 레포에 개인 일정·금액을 넣지 않으려고) template은 빈 목록. 저장은 서버가 id마다 합친다(mergeMove_).
+  const MVS = { data: null, loaded: false };
+  if (!window.HH_MOVE && !LOCAL && window.HHMove) {
+    window.HH_MOVE = window.HHMove.create({
+      template: [], extras: true,
+      load: () => MVS.data,
+      save: async (m) => {
+        if (!MVS.loaded) throw new Error("아직 불러오는 중이에요");
+        const prev = MVS.data; MVS.data = m;
+        try { const r = await call("saveMove", { move: m }); MVS.data = r.move || m; }
+        catch (e) { MVS.data = prev; throw e; }
+      },
+      toast: (t) => toast(t),
+      who: () => CM.who,
+      setWho: (v) => { CM.who = v; try { localStorage.setItem("hh_who", v); } catch (e) { /* 저장 안 돼도 이번엔 씀 */ } },
+      assets: { upload: (f) => DRIVE_ASSETS.upload(f), delete: (id) => DRIVE_ASSETS.delete(id), src: (p) => imgSrc(p) },
+      open: (list, i, alt) => openViewer(list, i, alt)
+    });
+  }
+  const MOVE = window.HH_MOVE || null;
+  if (MOVE) $("viewMoveBtn").hidden = false;
   function setView(v) {
+    if (v === "move" && !MOVE) v = "list";
     MAPV.on = v === "map";
+    const mv = v === "move";
+    $("moveWrap").hidden = !mv;
+    document.querySelector(".wrap").classList.toggle("view-move", mv);
+    if (mv) MOVE.mount($("moveWrap"));
     document.querySelectorAll("[data-view]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.view === v)));
     $("mapWrap").hidden = !MAPV.on;
     document.querySelector(".wrap").classList.toggle("view-map", MAPV.on);
@@ -1078,7 +1115,7 @@ td.who .last-cmt { max-width: 360px; }
   }
   document.querySelectorAll("[data-view]").forEach((b) => b.addEventListener("click", () => setView(b.dataset.view)));
   $("btnFitMap").addEventListener("click", () => { if (MAPV.map) fitAll(); });
-  if (lsGet("hh_view") === "map") setView("map"); // 지난번에 지도로 봤으면 지도로 연다(기기별)
+  if (lsGet("hh_view") === "map" || (lsGet("hh_view") === "move" && MOVE)) setView(lsGet("hh_view")); // 지난번에 지도·이사로 봤으면 그대로 연다(기기별)
 
   function renderCompare() {
     const picked = S.items.filter((it) => S.sel.has(it.id));
@@ -1586,14 +1623,14 @@ td.who .last-cmt { max-width: 360px; }
       body.photos = photos;
       body.videos = videos;
       body.updatedAt = new Date().toISOString();
-      if (!old) { body.createdAt = body.updatedAt; body.source = "효니"; }
+      if (!old) { body.createdAt = body.updatedAt; body.source = LOCAL ? "나" : "효니"; }
       // 링크가 있는데 면적·방·보증금 중 빈 칸이 있으면 클로드 정리 대기(매일 아침 정기 검색이 빈 칸만 채움)
       // 네이버는 클로드가 열 수 없어 대기로 두지 않는다. 공고는 면적이 범위라 대상에서 뺀다
       // 2026-11-18: 링크가 없어도 주소가 있으면 대기(클로드가 주소로 같은 건물 매물·건물 정보를 찾음)
       const missing = body.kind !== "공고" && ((body.link && siteOf(body.link).site !== "네이버") || (!body.link && body.address)) && (body.area == null || body.rooms == null || body.deposit == null || (body.deal !== "전세" && body.rent == null));
       // 클로드가 «못함»으로 둔 집은 링크·주소가 그대로면 다시 대기로 돌리지 않는다(매일 같은 집을 또 찾지 않게)
       const sameSrc = old && old.fill === "못함" && (old.link || "") === (body.link || "") && (old.address || "") === (body.address || "");
-      body.fill = missing ? (sameSrc ? "못함" : "대기") : (old && old.fill === "완료" ? "완료" : "");
+      body.fill = LOCAL ? "" : missing ? (sameSrc ? "못함" : "대기") : (old && old.fill === "완료" ? "완료" : "");
       const qid = !old && S.quickId && !S.items.some((x) => x.id === S.quickId) ? S.quickId : null;
       const ref = S.editing ? S.db.doc("listings/" + S.editing) : qid ? S.db.doc("listings/" + qid) : S.db.collection("listings").doc();
       await ref.set(body);
@@ -1649,6 +1686,7 @@ td.who .last-cmt { max-width: 360px; }
   const setKey = (k) => { try { localStorage.setItem(KEY_NAME, k); } catch (e) { /* 저장 안 돼도 이번엔 쓸 수 있음 */ } };
   let memKey = "";
   async function call(action, extra) {
+    if (LOCAL) return LOCAL.call(action, extra);
     if (API.indexOf("http") !== 0) { const e = new Error("백엔드 주소가 아직 없어요"); e.code = "no_api"; throw e; }
     const r = await fetch(API, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" }, body: JSON.stringify(Object.assign({ key: getKey() || memKey, action: action }, extra || {})) });
     const j = await r.json();
@@ -1692,6 +1730,10 @@ td.who .last-cmt { max-width: 360px; }
   };
   async function refresh() {
     const j = await call("list");
+    if (!LOCAL) { // 개인판 이사 탭: 바뀌었으면 다시 그린다(쓰는 중이면 MOVE.refresh가 건너뜀)
+      const ms = JSON.stringify(j.move || null), was = MVS.loaded;
+      if (!was || ms !== JSON.stringify(MVS.data)) { MVS.data = j.move || null; MVS.loaded = true; if (MOVE && !$("moveWrap").hidden) { if (was) MOVE.refresh(); else MOVE.render(); } }
+    }
     const sig = JSON.stringify([j.items, j.cond, j.comments, j.agents, j.geo, j.ref, j.geoError]);
     store.loaded = true;
     if (sig === store.sig) return;
@@ -1840,7 +1882,7 @@ td.who .last-cmt { max-width: 360px; }
   let started = false;
   async function start() {
     const note = $("statusNote");
-    S.db = db; S.assets = DRIVE_ASSETS; S.canWrite = true;
+    S.db = db; S.assets = LOCAL ? LOCAL.assets : DRIVE_ASSETS; S.canWrite = true;
     if (!started) {
       started = true;
       db.collection("listings").onSnapshot((snap) => {
@@ -1851,10 +1893,11 @@ td.who .last-cmt { max-width: 360px; }
         if (SHARED && !SHARED.done) { SHARED.done = true; openForm(null); $("f_quick").value = SHARED.text; quickFill(); }
       });
       db.doc("settings/conditions").onSnapshot((snap) => { if (snap.exists) { S.cond = Object.assign({}, DEFAULT_COND, snap.data()); render(); } });
-      setInterval(() => { if (!document.hidden && getKey()) refresh().catch(() => {}); }, 30000);
-      document.addEventListener("visibilitychange", () => { if (!document.hidden && getKey()) refresh().catch(() => {}); });
+      setInterval(() => { if (!document.hidden && (LOCAL || getKey())) refresh().catch(() => {}); }, 30000);
+      document.addEventListener("visibilitychange", () => { if (!document.hidden && (LOCAL || getKey())) refresh().catch(() => {}); });
+      if (LOCAL) LOCAL.ready({ refresh: () => refresh().catch(() => {}), toast: toast, render: render, closeSheets: closeSheets, openSheet: openSheet, cond: () => S.cond });
     }
-    if (!getKey() && !memKey) { note.textContent = "비밀번호를 넣으면 목록이 보여요."; showGate(""); return; }
+    if (!LOCAL && !getKey() && !memKey) { note.textContent = "비밀번호를 넣으면 목록이 보여요."; showGate(""); return; }
     try { await refresh(); note.hidden = true; if (!NEWS.saved) { NEWS.saved = true; markVisit(); } }
     catch (e) {
       note.hidden = false; note.classList.add("warn");
